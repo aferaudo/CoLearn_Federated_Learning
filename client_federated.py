@@ -67,7 +67,7 @@ def train_local(worker, model, opt, epochs, federated_train_loader, args):
                 # 5) change those weights
                 opt.step()
 
-                model = model.get()
+                model.get()
                 if batch_idx % args.log_interval == 0:
                     loss = loss.get() # <-- NEW: get the loss back
                     print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(

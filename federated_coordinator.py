@@ -161,13 +161,14 @@ class Coordinator(mqtt.Client):
                 models[worker] = temp_model
 
 
-            #print(models)
+            print(models)
 
             # to_process = []
             # for key in models.keys():
             #     to_process.append(models[key])
             
-            model = utils.federated_avg(models)
+            self.model = utils.federated_avg(models)
+            print(self.model)
             # If we have enough worker I can delete all the known_workers, after the training
             self.__remove_safely_known_workers()
         else:
