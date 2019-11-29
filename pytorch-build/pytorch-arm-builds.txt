@@ -1,0 +1,2 @@
+https://github.com/pytorch/pytorch/issues/23233 --> in this you will find the version 1.3.0
+https://github.com/nmilosev/pytorch-arm-builds --> here there are different version of pytorch and also how to build this wheel file

@@ -36,6 +36,14 @@ from event_parser import EventParser
 import client_federated as cf
 from threading import Timer
 
+# This is important to exploit the GPU if it is available
+use_cuda = torch.cuda.is_available()
+
+# Seed for the random number generator
+torch.manual_seed(1)
+
+device = torch.device("cuda" if use_cuda else "cpu")
+
 
 class Arguments():
     def __init__(self):
@@ -139,7 +147,7 @@ class Coordinator(mqtt.Client):
             # Do the training
             print("I will do the training")
             
-            # In this case Local the data will be created by us and then distributed
+            # In this case Local the data will be created by us and then distributed (This is the MNIST example)
             federated_train_loader = sy.FederatedDataLoader( # <-- this is now a FederatedDataLoader 
                 datasets.MNIST('../data', train=True, download=True,
                                transform=transforms.Compose([
@@ -149,10 +157,15 @@ class Coordinator(mqtt.Client):
                 .federate(tuple(self.server._known_workers.values())), # <-- NEW: we distribute the dataset across all the workers, it's now a FederatedDataset
                 batch_size=self.args.batch_size, shuffle=True)
 
-            print(self.server._known_workers)
-            
-            
+            # Test loader to evaluate our model
+            test_loader = torch.utils.data.DataLoader(
+                    datasets.MNIST('../data', train=False, transform=transforms.Compose([
+                       transforms.ToTensor(),
+                       transforms.Normalize((0.1307,), (0.3081,))
+                   ])),
+                batch_size=self.args.test_batch_size, shuffle=True)
 
+            # Optimizer used Stochstic gradient descent
             optimizer = optim.SGD(self.model.parameters(), lr=self.args.lr)
             models = {}
             for worker in list(self.server._known_workers.keys()):
@@ -162,13 +175,14 @@ class Coordinator(mqtt.Client):
 
 
             print(models)
-
-            # to_process = []
-            # for key in models.keys():
-            #     to_process.append(models[key])
             
+            # Apply the federated averaging algorithm
             self.model = utils.federated_avg(models)
             print(self.model)
+
+            # Evaluate the model obtained
+            cf.evaluate_local(model=self.model, args=self.args, test_loader=test_loader, device=device)
+
             # If we have enough worker I can delete all the known_workers, after the training
             self.__remove_safely_known_workers()
         else:
