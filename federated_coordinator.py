@@ -1,19 +1,7 @@
 #!/usr/bin/python
-# -*- coding: utf-8 -*-
-
-# Copyright (c) 2013 Roger Light <roger@atchoo.org>
-#
-# All rights reserved. This program and the accompanying materials
-# are made available under the terms of the Eclipse Distribution License v1.0
-# which accompanies this distribution.
-#
-# The Eclipse Distribution License is available at
-#   http://www.eclipse.org/org/documents/edl-v10.php.
-#
-# Contributors:
-#    Roger Light - initial implementation
-
-# This example shows how you can use the MQTT client in a class.
+# TODO client side you can realize the publisher. This means that when the 
+# start_worker.py is launched we have also to specify, if is launched for 
+# training or for inference. Thus, we can manage the envent that will be sent.
 
 # BROKER SETTINGS (First stop the default service launchctl stop homebrew.mxcl.mosquitto)
 # /usr/local/sbin/mosquitto -c /usr/local/etc/mosquitto/mosquitto.conf --> launch mosquitto
@@ -93,7 +81,8 @@ class Coordinator(mqtt.Client):
                
                 print(self.server._known_workers)
                 
-                if self.event_served == 1: # Start the timer after received an event
+                if self.event_served == 1: 
+                    # Start the timer after received an event. This creates our window
                     print("Timer starting")
                     t = Timer(self.window, self.__starting_training)
                     t.start()
@@ -140,8 +129,9 @@ class Coordinator(mqtt.Client):
         # -1 is introduced because in the list is considered also the local worker, which is our coordinator
         if (len(self.server._known_workers) - 1) >= self.training_lower_bound:
             
-            # if len(workers_training >= up):
+            if len(self.server._known_workers >= self.training_upper_bound):
             #     # TODO apply a selection criteria
+                print("To implement")
             
             
             # Do the training
