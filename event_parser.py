@@ -13,26 +13,39 @@ class EventParser():
     def ip_address(self):
         
         # Now the string must be parsed, in order to obtain the ip address of the device
-        #1) remove the brackets
+        # 1) remove the brackets
         to_parse = re.sub(r'[\(\)]', '', self.message)
 
-        #2) obtain the ip address
+        # 2) obtain the ip address
         ip_address = re.split(r',', to_parse)[0]
 
-        #3) verify ip address
+        # 3) verify ip address
         pattern = r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}'
         if(re.match(pattern, ip_address)):
             return ip_address
         else:
             return -1
     
-    def state(self):
-        # Now the string must be parsed, in order to obtain the ip address of the device
-        #1) remove the brackets
+    def port(self):
+        # 1) remove the brackets
         to_parse = re.sub(r'[\(\)]', '', self.message)
 
-        #2) obtain the ip address
-        state = re.split(r', ', to_parse)[1]
+        # 2) obtain the port
+        port = int(re.split(r',', to_parse)[1])
+
+        # 3) Verify the port
+        if port in range(65535):
+            return port
+        else:
+            return -1
+
+    def state(self):
+        # Now the string must be parsed, in order to obtain the event sent by the device (which represent its state)
+        # 1) remove the brackets
+        to_parse = re.sub(r'[\(\)]', '', self.message)
+
+        # 2) obtain the state
+        state = re.split(r', ', to_parse)[2]
         if state in states:
             return state
         else:

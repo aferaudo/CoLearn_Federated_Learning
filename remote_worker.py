@@ -11,7 +11,7 @@ parser = argparse.ArgumentParser(description="Run websocket server worker.")
 parser.add_argument(
     "--port", "-p", type=int, default=8777, help="port number of the websocket server worker, e.g. --port 8777"
 )
-parser.add_argument("--host", type=str, default="localhost", help="host for the connection")
+parser.add_argument("--host", type=str, default="192.168.1.193", help="host for the connection")
 parser.add_argument(
     "--id", type=str, default="bob", help="name (id) of the websocket server worker, e.g. --id alice"
 )
@@ -64,7 +64,7 @@ def main(args):  # pragma: no cover
 
     # String to publish
     # TODO obtain automatically the ip address
-    to_publish = '('+ '192.168.1.1, ' + args.event + ')'
+    to_publish = '('+ '192.168.1.193, ' + str(args.port) +', ' + args.event +')'
     # Setup toy data (xor example)
     data = th.tensor([[0.0, 1.0], [1.0, 0.0], [1.0, 1.0], [0.0, 0.0]], requires_grad=True)
     target = th.tensor([[1.0], [1.0], [0.0], [0.0]], requires_grad=False)
@@ -78,7 +78,7 @@ def main(args):  # pragma: no cover
     dataset = sy.BaseDataset(data, target)
 
     # Tell the worker about the dataset
-    worker.add_dataset(dataset, key="xor1")
+    worker.add_dataset(dataset, key="training")
 
     fn = lambda : client.publish(args.topic, to_publish)
     # Publish the event that the server is ready after an interval

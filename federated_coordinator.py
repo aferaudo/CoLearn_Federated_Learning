@@ -14,9 +14,11 @@ import sys
 import getopt
 import torch
 import syft as sy
+import asyncio
 from torch import optim
 import time
 from syft.frameworks.torch.federated import utils
+from syft.workers.websocket_client import WebsocketClientWorker
 
 import paho.mqtt.client as mqtt
 from torchvision import datasets, transforms # datasets is used only to do some tests
@@ -37,7 +39,8 @@ class Arguments():
     def __init__(self):
         self.batch_size = 64
         self.test_batch_size = 1000
-        self.epochs = 1
+        self.epochs = 100
+        self.federate_after_n_batches = 10
         self.lr = 0.01
         self.momentum = 0.5
         self.no_cuda = False
@@ -47,7 +50,7 @@ class Arguments():
 
 class Coordinator(mqtt.Client):
 
-    def __init__(self, window):
+    def __init__(self, window, remote):
         super(Coordinator, self).__init__()
         self.training_lower_bound = 2
         self.training_upper_bound = 100
@@ -55,9 +58,10 @@ class Coordinator(mqtt.Client):
         self.__hook = sy.TorchHook(torch)
         self.__hook.local_worker.is_client_worker = False # Set the local worker as a server: All the other worker will be registered in __known_workers
         self.server = self.__hook.local_worker
-        self.window = 20.0
+        self.window = window
+        self.remote = remote
         # TODO load the model from a file if it is present, otherwise create a new one
-        self.model = cf.Net()
+        self.model = cf.TestingRemote()
         self.args = Arguments()
         
 
@@ -68,24 +72,53 @@ class Coordinator(mqtt.Client):
     def on_message(self, mqttc, obj, msg):
         print(msg.topic+" "+str(msg.qos)+" "+str(msg.payload))
         parser = EventParser(msg.payload)
+        
+        # Obtain ip address
         ip_address = parser.ip_address()
+     
+        # Obtain the state of the server
         state = parser.state()
+
+        # Obtain the port for the remoteworker (Server)
+        port = parser.port()
+        
         if ip_address != -1 and state != None:
-            print(ip_address + " " + state )
-            
+            print(ip_address + " " + state + " " + str(port))
+            identifier = ip_address + ":" + str(port)
+            print(identifier)
             if state == "TRAINING":
                 self.event_served += 1
-                print("Beharvior training")
                 
-                worker = sy.VirtualWorker(self.__hook, ip_address) # registration
-               
-                print(self.server._known_workers)
+                if not self.remote:
+                    # Create Virtual Worker
+                    worker = sy.VirtualWorker(self.__hook, ip_address) # registration
+                else:
+                    # Create remote Worker
+                    print("Remote")
+                    if port != -1:
+                        kwargs_websocket = {"host": ip_address, "hook": self.__hook, "verbose": True}
+                        worker = WebsocketClientWorker(id=identifier, port=port, **kwargs_websocket)
+                    else:
+                        print("Server worker: " + ip_address + " port not valid!")
+
+                [print(worker1[1]) for worker1 in self.server._known_workers.items() if worker1[0] != 'me']
+                print(worker)
                 
                 if self.event_served == 1: 
                     # Start the timer after received an event. This creates our window
                     print("Timer starting")
-                    t = Timer(self.window, self.__starting_training)
-                    t.start()
+
+                    # We have two different method, one for the virtual worker and one for the remote
+                    if self.remote:
+                        print("Remote execution")
+                        t = Timer(self.window, self.__starting_training_remote)
+                        # asyncio.get_event_loop().run_until_complete(self.__starting_training_remote())
+                        t.start()
+                        
+                    else:
+                        t = Timer(self.window, self.__starting_training)
+                        t.start()
+                    
                     
 
             elif state == "INFERENCE":
@@ -93,13 +126,14 @@ class Coordinator(mqtt.Client):
                 print("Behavior inference")
             
             elif state == "NOT_READY":
+                # TODO When a client is no more available we have to remove it from the workers list (training, inference or both?)
                 self.__remove_safely_known_workers(key=ip_address)
                 print(self.server._known_workers)
 
             else:
                 print("No behavior defined for this event")
 
-            # TODO When a client is no more available we have to remove it from the workers list (training, inference or both?)
+            
 
 
         else:
@@ -172,12 +206,58 @@ class Coordinator(mqtt.Client):
 
             # Evaluate the model obtained
             cf.evaluate_local(model=self.model, args=self.args, test_loader=test_loader, device=device)
-
             # If we have enough worker I can delete all the known_workers, after the training
             self.__remove_safely_known_workers()
+
+
         else:
             # TODO Decide the correct behaviour: continue? Or throw everithing away?
-            print("something") 
+            print("something")
+
+
+
+
+    def __starting_training_remote(self):
+        # TODO Implement the remote training
+        print("Remote method")
+        # Remember that the serializable model requires a starting point:
+        # for this reason we pass the mockdata: torch.zeros([1, 1, 28, 28]
+        traced_model = torch.jit.trace(self.model, torch.zeros(1, 2))
+        learning_rate = self.args.lr
+        
+        print("Start fitting...")
+        results = [
+                cf.train_remote(
+                    worker=worker[1],
+                    traced_model=traced_model,
+                    batch_size=self.args.batch_size,
+                    optimizer="SGD",
+                    max_nr_batches=self.args.federate_after_n_batches,
+                    epochs=self.args.epochs,
+                    lr=learning_rate,
+                )
+                for worker in self.server._known_workers.items() if worker[0] != 'me'
+        ]
+        print("Fitting ended!")
+        models = {}
+        loss_values = {}
+
+        # Federate models (note that this will also change the model in models[0]
+        for worker_id, worker_model, worker_loss in results:
+            if worker_model is not None:
+                models[worker_id] = worker_model
+                loss_values[worker_id] = worker_loss
+        
+        print(models)
+
+        # Apply the federated averaging algorithm
+        self.model = utils.federated_avg(models)
+        print(self.model)
+
+        # If we have enough worker I can delete all the known_workers, after the training
+        self.__remove_safely_known_workers()
+
+
 
     def __remove_safely_known_workers(self, key=None):
         # Delete everithing exept me
@@ -194,12 +274,12 @@ def main(argv):
     keepalive = 60
     port = 1883
     topic = None
-
+    remote = False
     
 
     try:
-        opts, args = getopt.getopt(argv, "h:k:p:t:v",
-                                   ["host","keepalive", "port",  "topic"])
+        opts, args = getopt.getopt(argv, "h:k:p:t:vr",
+                                   ["host","keepalive", "port",  "topic","remote"])
     except getopt.GetoptError as s:
         sys.exit(2)
     for opt, arg in opts:
@@ -212,12 +292,14 @@ def main(argv):
         elif opt in ("-t", "--topic"):
             topic = arg
             print(topic)
+        elif opt in ("-r", "--remote"):
+            remote = True
 
     if topic == None:
         print("You must provide a topic to clear.\n")
         sys.exit(2)
     
-    mqttc = Coordinator(10)
+    mqttc = Coordinator(10, remote)
     rc = mqttc.run(host, port, topic, keepalive)
     # print("rc: "+str(rc))
 

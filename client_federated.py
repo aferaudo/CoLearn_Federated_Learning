@@ -2,6 +2,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import asyncio
 
 import syft as sy
 from syft.workers import websocket_client
@@ -26,7 +27,28 @@ class Net(nn.Module):
         x = self.fc2(x)
         return F.log_softmax(x, dim=1)
 
-# TODO define training local workers
+class TestingRemote(nn.Module):
+    def __init__(self):
+        super(TestingRemote, self).__init__()
+        self.fc1 = nn.Linear(2, 20)
+        self.fc2 = nn.Linear(20, 10)
+        self.fc3 = nn.Linear(10, 1)
+    
+    def forward(self, x):
+        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc2(x))
+        x = self.fc3(x)
+        return x
+
+# Loss function
+# it needs to be serializable. 
+#  We can define a usual function just changing it to use jit.
+@torch.jit.script
+def loss_fn(target, pred):
+    return ((target.view(pred.shape).float() - pred.float()) ** 2).mean()
+    # or for example you can use
+    # return F.nll_loss(input=pred, target=target)
+
 def train_local(worker, model, opt, epochs, federated_train_loader, args):
     # In this case the location of the worker is directly in the data
     """Send the model to the worker and fit the model on the worker's training data.
@@ -81,9 +103,46 @@ def train_local(worker, model, opt, epochs, federated_train_loader, args):
 
     print()
 
-# TODO define training remote workers: websocket
-def train_remote():
-    print()
+# TODO implements the asynchronous! Because it could require a lot of time
+def train_remote(
+    worker: websocket_client.WebsocketClientWorker,
+    traced_model: torch.jit.ScriptModule,
+    batch_size: int,
+    optimizer: str,
+    max_nr_batches: int,
+    epochs: int,
+    lr: float,
+    ):
+    """Send the model to the worker and fit the model on the worker's training data.
+    Args:
+        worker: Remote location, where the model shall be trained.
+        traced_model: Model which shall be trained.
+        batch_size: Batch size of each training step.
+        optimizer: name of the optimizer to be used
+        max_nr_batches: If > 0, training on worker will stop at min(max_nr_batches, nr_available_batches).
+        epochs: Number of epochs to perform remotely
+        lr: Learning rate of each training step.
+    Returns:
+        A tuple containing:
+            * worker_id: Union[int, str], id of the worker.
+            * improved model: torch.jit.ScriptModule, model after training at the worker.
+            * loss: Loss on last training batch, torch.tensor.
+    """
+    train_config = sy.TrainConfig(
+        model=traced_model,
+        loss_fn=loss_fn,
+        batch_size=batch_size,
+        shuffle=True,
+        max_nr_batches=max_nr_batches,
+        epochs=epochs,
+        optimizer=optimizer,
+        optimizer_args={"lr": lr},
+    )
+
+    train_config.send(worker)
+    loss = worker.fit(dataset_key="training", return_ids=[0])
+    model = train_config.model_ptr.get().obj
+    return worker.id, model, loss
 
 # TODO define testing: The testing actually could be the same for local purposes and remote purposes
 def evaluate_local(model, args, test_loader, device):
