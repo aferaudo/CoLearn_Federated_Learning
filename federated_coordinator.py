@@ -219,7 +219,12 @@ class Coordinator(mqtt.Client):
 
     def __starting_training_remote(self):
         # TODO Implement the remote training
+        # TODO Solve this problem: Returning the object as is.
+        # warnings.warn('The input to trace is already a ScriptModule, tracing it is a no-op. Returning the object as is.')
+        # I think that is due to the fact that the model is still serialized, so to solve this copy the weight in another
+        # model or save them someqhere and then reload them!
         print("Remote method")
+        self.event_served = 0
         # Remember that the serializable model requires a starting point:
         # for this reason we pass the mockdata: torch.zeros([1, 1, 28, 28]
         traced_model = torch.jit.trace(self.model, torch.zeros(1, 2))
@@ -263,6 +268,8 @@ class Coordinator(mqtt.Client):
         # Delete everithing exept me
         if key == None:
             for key in list(self.server._known_workers.keys())[1:]:
+                # TODO try the following code
+                # self.server.remove_worker_from_local_worker_registry(key) 
                 del self.server._known_workers[key]
         else:
             del self.server._known_workers[key]
@@ -299,7 +306,7 @@ def main(argv):
         print("You must provide a topic to clear.\n")
         sys.exit(2)
     
-    mqttc = Coordinator(10, remote)
+    mqttc = Coordinator(20, remote)
     rc = mqttc.run(host, port, topic, keepalive)
     # print("rc: "+str(rc))
 

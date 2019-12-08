@@ -99,10 +99,6 @@ def train_local(worker, model, opt, epochs, federated_train_loader, args):
 
     return model, loss
 
-
-
-    print()
-
 # TODO implements the asynchronous! Because it could require a lot of time
 def train_remote(
     worker: websocket_client.WebsocketClientWorker,
@@ -144,7 +140,7 @@ def train_remote(
     model = train_config.model_ptr.get().obj
     return worker.id, model, loss
 
-# TODO define testing: The testing actually could be the same for local purposes and remote purposes
+
 def evaluate_local(model, args, test_loader, device):
     """Evaluate the model locally.
     Args:
