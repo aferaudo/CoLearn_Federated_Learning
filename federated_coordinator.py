@@ -17,6 +17,7 @@ import syft as sy
 import asyncio
 from torch import optim
 import time
+import os.path
 from syft.frameworks.torch.federated import utils
 from syft.workers.websocket_client import WebsocketClientWorker
 
@@ -34,6 +35,11 @@ torch.manual_seed(1)
 
 device = torch.device("cuda" if use_cuda else "cpu")
 
+# @sy.func2plan(args_shape=[(1,1)])
+# def inference_with_anomaly_detection(x):
+#     print("nothing")
+#     if x == 1.0:
+#         print("Anomaly detected")
 
 class Arguments():
     def __init__(self):
@@ -49,19 +55,18 @@ class Arguments():
         self.save_model = False
 
 class Coordinator(mqtt.Client):
-
     def __init__(self, window, remote):
         super(Coordinator, self).__init__()
-        self.training_lower_bound = 2
+        self.training_lower_bound = 1
         self.training_upper_bound = 100
         self.event_served = 0
+        self.training_devices = {}
         self.__hook = sy.TorchHook(torch)
         self.__hook.local_worker.is_client_worker = False # Set the local worker as a server: All the other worker will be registered in __known_workers
         self.server = self.__hook.local_worker
         self.window = window
         self.remote = remote
-        # TODO load the model from a file if it is present, otherwise create a new one
-        self.model = cf.TestingRemote()
+        self.path = './test.pth' # Where the model is saved, and from is loaded
         self.args = Arguments()
         
 
@@ -86,23 +91,28 @@ class Coordinator(mqtt.Client):
             print(ip_address + " " + state + " " + str(port))
             identifier = ip_address + ":" + str(port)
             print(identifier)
+            
+            
+            # TRAINING
             if state == "TRAINING":
                 self.event_served += 1
                 
                 if not self.remote:
                     # Create Virtual Worker
-                    worker = sy.VirtualWorker(self.__hook, ip_address) # registration
+                    worker = sy.VirtualWorker(self.__hook, ip_address) 
+                    self.training_devices[worker.id] = worker # registration
                 else:
                     # Create remote Worker
                     print("Remote")
                     if port != -1:
                         kwargs_websocket = {"host": ip_address, "hook": self.__hook, "verbose": True}
                         worker = WebsocketClientWorker(id=identifier, port=port, **kwargs_websocket)
+                        self.training_devices[worker.id] = worker
                     else:
                         print("Server worker: " + ip_address + " port not valid!")
 
-                [print(worker1[1]) for worker1 in self.server._known_workers.items() if worker1[0] != 'me']
-                print(worker)
+                # [print(worker1[1]) for worker1 in self.server._known_workers.items() if worker1[0] != 'me']
+                # print(worker)
                 
                 if self.event_served == 1: 
                     # Start the timer after received an event. This creates our window
@@ -123,8 +133,52 @@ class Coordinator(mqtt.Client):
 
             elif state == "INFERENCE":
                 # TODO inference
-                print("Behavior inference")
-            
+                print("Inference received")
+
+                # The model is loaded each time that someone asks for it
+                # In this case, we don't need to save it at the end
+                if not os.path.exists(self.path): # If the model doesn't exist we create a new one
+                    model = cf.TestingRemote()
+                else:
+                    print('Loading model')
+                    model = cf.TestingRemote()
+                    model.load_state_dict(torch.load(self.path))
+                
+                if self.remote:
+                    # Obtain Client worker
+                    if port != -1:
+                        kwargs_websocket = {"host": ip_address, "hook": self.__hook, "verbose": True}
+                        worker = WebsocketClientWorker(id=identifier, port=port, **kwargs_websocket)
+                    else:
+                        print("Server worker: " + ip_address + " port not valid!")
+                else:
+                    print("Local inference not implemented!")
+                
+
+                # Obtain pointer to the data
+                data_pointer = worker.search("inference")# This return a list, we take only the first element
+                print(data_pointer)
+                if data_pointer != []:
+                    data_pointer = data_pointer[0]
+                    
+                    # Send the model
+                    model = model.send(worker)
+
+                    # To avoid waste of bandwidth the best solution is to create a behaviour that send back an event in case of anomaly
+                    # Build the plan
+                    # inference_with_anomaly_detection.build()
+                    # pointer_plan = inference_with_anomaly_detection.send(worker)
+
+                    # Apply the model to the data
+                    with torch.no_grad():
+                        output_pointer = model(data_pointer)
+                        prediction_pointer = output_pointer.argmax(1, keepdim=True)
+                        print(prediction_pointer.get())
+
+                    del self.server._known_workers[worker.id]
+                else:
+                    print("Inference data not found!")
+        
             elif state == "NOT_READY":
                 # TODO When a client is no more available we have to remove it from the workers list (training, inference or both?)
                 self.__remove_safely_known_workers(key=ip_address)
@@ -143,7 +197,6 @@ class Coordinator(mqtt.Client):
     def on_publish(self, mqttc, obj, mid):
         print("mid: "+str(mid))
 
- 
 
     def run(self, host, port, topic, keepalive):
         self.connect(host, port)
@@ -154,6 +207,7 @@ class Coordinator(mqtt.Client):
             rc = self.loop_forever()
         return rc
     
+
     def __starting_training(self):
         # TODO Now in both the case, (1)when we have an adequate number of client and (2) when not, 
         # The window will be recreated at the next event (This beharviour is correct?)
@@ -161,13 +215,20 @@ class Coordinator(mqtt.Client):
 
         # If we have enough device the training will be done, otherwise we wait other event
         # -1 is introduced because in the list is considered also the local worker, which is our coordinator
-        if (len(self.server._known_workers) - 1) >= self.training_lower_bound:
+        if (len(self.training_devices) - 1) >= self.training_lower_bound:
             
-            if len(self.server._known_workers >= self.training_upper_bound):
+            if (len(self.training_devices) - 1)>= self.training_upper_bound:
             #     # TODO apply a selection criteria
                 print("To implement")
+        
             
-            
+            # The model must be loaded each time that we do the training
+            if not os.path.exists(self.path): # If the model doesn't exist we create a new one
+                model = cf.Net()
+            else:
+                model = cf.Net()
+                model.load_state_dict(torch.load(self.path))
+      
             # Do the training
             print("I will do the training")
             
@@ -190,24 +251,27 @@ class Coordinator(mqtt.Client):
                 batch_size=self.args.test_batch_size, shuffle=True)
 
             # Optimizer used Stochstic gradient descent
-            optimizer = optim.SGD(self.model.parameters(), lr=self.args.lr)
+            optimizer = optim.SGD(model.parameters(), lr=self.args.lr)
             models = {}
             for worker in list(self.server._known_workers.keys()):
                 temp_model, loss = cf.train_local( worker=worker,
-                model=self.model, opt=optimizer, epochs=self.args.epochs, federated_train_loader=federated_train_loader, args=self.args)
+                model=model, opt=optimizer, epochs=self.args.epochs, federated_train_loader=federated_train_loader, args=self.args)
                 models[worker] = temp_model
 
 
             print(models)
             
             # Apply the federated averaging algorithm
-            self.model = utils.federated_avg(models)
-            print(self.model)
+            model = utils.federated_avg(models)
+            print(model)
+            
+            # After the training we save the model
+            torch.save(model.state_dict(), self.path)
 
             # Evaluate the model obtained
-            cf.evaluate_local(model=self.model, args=self.args, test_loader=test_loader, device=device)
+            cf.evaluate_local(model=model, args=self.args, test_loader=test_loader, device=device)
             # If we have enough worker I can delete all the known_workers, after the training
-            self.__remove_safely_known_workers()
+            self.__remove_safely_known_workers(training=True)
 
 
         else:
@@ -223,56 +287,86 @@ class Coordinator(mqtt.Client):
         # warnings.warn('The input to trace is already a ScriptModule, tracing it is a no-op. Returning the object as is.')
         # I think that is due to the fact that the model is still serialized, so to solve this copy the weight in another
         # model or save them someqhere and then reload them!
-        print("Remote method")
-        self.event_served = 0
-        # Remember that the serializable model requires a starting point:
-        # for this reason we pass the mockdata: torch.zeros([1, 1, 28, 28]
-        traced_model = torch.jit.trace(self.model, torch.zeros(1, 2))
-        learning_rate = self.args.lr
+        if len(self.training_devices) >= self.training_lower_bound:
+            
+            if len(self.training_devices) >= self.training_upper_bound:
+                #     # TODO apply a selection criteria
+                print("To implement")
+            
+            # The model must be loaded each time that we do the training
+            if not os.path.exists(self.path): # If the model doesn't exist we create a new one
+                print("No existing model")
+                model = cf.TestingRemote()
+            else:
+                model = cf.TestingRemote()
+                model.load_state_dict(torch.load(self.path))
+
+            print("Remote method")
+            self.event_served = 0
+            # Remember that the serializable model requires a starting point:
+            # for this reason we pass the mockdata: torch.zeros([1, 1, 28, 28]
+            traced_model = torch.jit.trace(model, torch.zeros(1, 2))
+            learning_rate = self.args.lr
+            
+            print("Start fitting...")
+            results = [
+                    cf.train_remote(
+                        worker=worker[1],
+                        traced_model=traced_model,
+                        batch_size=self.args.batch_size,
+                        optimizer="SGD",
+                        max_nr_batches=self.args.federate_after_n_batches,
+                        epochs=self.args.epochs,
+                        lr=learning_rate,
+                    )
+                    for worker in self.server._known_workers.items() if worker[0] != 'me'
+            ]
+            print("Fitting ended!")
+            models = {}
+            loss_values = {}
+
+            # Federate models (note that this will also change the model in models[0]
+            for worker_id, worker_model, worker_loss in results:
+                if worker_model is not None:
+                    models[worker_id] = worker_model
+                    loss_values[worker_id] = worker_loss
+            
+            print(models)
+
+            # Apply the federated averaging algorithm
+            model = utils.federated_avg(models)
+            print(model)
+
+            # After the training we save the model
+            torch.save(model.state_dict(), self.path)
+
+            # If we have enough worker I can delete all the known_workers, after the training
+            self.__remove_safely_known_workers(training=True)
         
-        print("Start fitting...")
-        results = [
-                cf.train_remote(
-                    worker=worker[1],
-                    traced_model=traced_model,
-                    batch_size=self.args.batch_size,
-                    optimizer="SGD",
-                    max_nr_batches=self.args.federate_after_n_batches,
-                    epochs=self.args.epochs,
-                    lr=learning_rate,
-                )
-                for worker in self.server._known_workers.items() if worker[0] != 'me'
-        ]
-        print("Fitting ended!")
-        models = {}
-        loss_values = {}
-
-        # Federate models (note that this will also change the model in models[0]
-        for worker_id, worker_model, worker_loss in results:
-            if worker_model is not None:
-                models[worker_id] = worker_model
-                loss_values[worker_id] = worker_loss
-        
-        print(models)
-
-        # Apply the federated averaging algorithm
-        self.model = utils.federated_avg(models)
-        print(self.model)
-
-        # If we have enough worker I can delete all the known_workers, after the training
-        self.__remove_safely_known_workers()
+        else:
+            # TODO Decide the correct behaviour: continue? Or throw everithing away?
+            print("something")
 
 
 
-    def __remove_safely_known_workers(self, key=None):
+    def __remove_safely_known_workers(self, key=None, training=False):
         # Delete everithing exept me
         if key == None:
-            for key in list(self.server._known_workers.keys())[1:]:
-                # TODO try the following code
-                # self.server.remove_worker_from_local_worker_registry(key) 
-                del self.server._known_workers[key]
+            if training:
+                # In case of training I have to delete remove from the known worker only the one that requested for training
+                for key in list(self.server._known_workers.keys())[1:]:
+                    if key in self.training_devices.keys():
+                        del self.server._known_workers[key]
+                self.training_devices = {}
+            else:
+                # In the other case, I have to delete all the worker except the training worker
+                for key in list(self.server._known_workers.keys())[1:]:
+                    if len(self.training_devices) != 0:
+                        if not key in self.training_devices.keys():
+                            del self.server._known_workers[key]
         else:
             del self.server._known_workers[key]
+            
 
 
 def main(argv):
@@ -306,7 +400,7 @@ def main(argv):
         print("You must provide a topic to clear.\n")
         sys.exit(2)
     
-    mqttc = Coordinator(20, remote)
+    mqttc = Coordinator(15, remote)
     rc = mqttc.run(host, port, topic, keepalive)
     # print("rc: "+str(rc))
 

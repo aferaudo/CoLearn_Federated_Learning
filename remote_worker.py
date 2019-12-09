@@ -5,16 +5,17 @@ from syft.workers.websocket_server import WebsocketServerWorker
 import paho.mqtt.client as mqtt
 import syft as sy
 from threading import Timer
+import numpy as np
+
+from torchvision import datasets, transforms # datasets is used only to do some tests
 
 # Arguments
 parser = argparse.ArgumentParser(description="Run websocket server worker.")
 parser.add_argument(
     "--port", "-p", type=int, default=8777, help="port number of the websocket server worker, e.g. --port 8777"
 )
-parser.add_argument("--host", type=str, default="192.168.1.193", help="host for the connection")
-parser.add_argument(
-    "--id", type=str, default="bob", help="name (id) of the websocket server worker, e.g. --id alice"
-)
+parser.add_argument("--host", type=str, required=True, help="host for the connection")
+
 parser.add_argument(
     "--broker", "-b", type=str, required=True, help="Broker of the mqtt protocol"
 )
@@ -48,12 +49,15 @@ def publish_event(broker, topic, event):
 # This script creates a worker and populate it with some toy data using worker.add_dataset, the dataset is identified by a key in this case xor.
 def main(args):  # pragma: no cover
     hook = sy.TorchHook(th)
+    identifier = args.host + ":" + str(args.port)
     kwargs = {
-        "id": args.id,
+        "id": identifier,
         "host": args.host,
         "port": args.port,
         "hook": hook,
         "verbose": args.verbose,
+        # "cert_path": "/Users/angeloferaudo/Desktop/Unibo Magistrale/Tesi/mud_file_server/mudfs/certs/server.pem", # Insert the cert here
+        # "key_path": "/Users/angeloferaudo/Desktop/Unibo Magistrale/Tesi/mud_file_server/mudfs/certs/server.key", # Insert the key here
     }
 
     # Create a client object
@@ -63,17 +67,17 @@ def main(args):  # pragma: no cover
     client.connect(args.broker)
 
     # String to publish
-    # TODO obtain automatically the ip address
-    to_publish = '('+ '192.168.1.193, ' + str(args.port) +', ' + args.event +')'
+
+    to_publish = '('+ args.host + ', ' + str(args.port) +', ' + args.event +')'
     # Setup toy data (xor example)
     data = th.tensor([[0.0, 1.0], [1.0, 0.0], [1.0, 1.0], [0.0, 0.0]], requires_grad=True)
     target = th.tensor([[1.0], [1.0], [0.0], [0.0]], requires_grad=False)
-
-    x = th.tensor([[0.0, 1.0], [1.0, 0.0], [1.0, 1.0], [0.0, 0.0]],requires_grad=False).tag("classify")
+    
+    x = th.tensor([[0.0, 1.0], [1.0, 0.0], [1.0, 1.0], [0.0, 0.0]],requires_grad=False).tag("inference")
 
     # Create websocket worker
     worker = WebsocketServerWorker(data=[x], **kwargs)
-
+    
     # Create a dataset using the toy data
     dataset = sy.BaseDataset(data, target)
 
