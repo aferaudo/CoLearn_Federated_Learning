@@ -99,11 +99,11 @@ class Coordinator(mqtt.Client):
                 
                 if not self.remote:
                     # Create Virtual Worker
+                    print("Local Execution")
                     worker = sy.VirtualWorker(self.__hook, ip_address) 
                     self.training_devices[worker.id] = worker # registration
                 else:
                     # Create remote Worker
-                    print("Remote")
                     if port != -1:
                         kwargs_websocket = {"host": ip_address, "hook": self.__hook, "verbose": True}
                         worker = WebsocketClientWorker(id=identifier, port=port, **kwargs_websocket)
@@ -121,10 +121,10 @@ class Coordinator(mqtt.Client):
                     # We have two different method, one for the virtual worker and one for the remote
                     if self.remote:
                         print("Remote execution")
-                        t = Timer(self.window, self.__starting_training_remote)
-                        # asyncio.get_event_loop().run_until_complete(self.__starting_training_remote())
+                        start_loop = lambda : asyncio.new_event_loop().run_until_complete(self.__starting_training_remote())
+                        t = Timer(self.window, start_loop)
                         t.start()
-                        
+
                     else:
                         t = Timer(self.window, self.__starting_training)
                         t.start()
@@ -215,9 +215,9 @@ class Coordinator(mqtt.Client):
 
         # If we have enough device the training will be done, otherwise we wait other event
         # -1 is introduced because in the list is considered also the local worker, which is our coordinator
-        if (len(self.training_devices) - 1) >= self.training_lower_bound:
+        if len(self.training_devices) >= self.training_lower_bound:
             
-            if (len(self.training_devices) - 1)>= self.training_upper_bound:
+            if len(self.training_devices)>= self.training_upper_bound:
             #     # TODO apply a selection criteria
                 print("To implement")
         
@@ -281,7 +281,7 @@ class Coordinator(mqtt.Client):
 
 
 
-    def __starting_training_remote(self):
+    async def __starting_training_remote(self):
         # TODO Implement the remote training
         # TODO Solve this problem: Returning the object as is.
         # warnings.warn('The input to trace is already a ScriptModule, tracing it is a no-op. Returning the object as is.')
@@ -308,8 +308,10 @@ class Coordinator(mqtt.Client):
             traced_model = torch.jit.trace(model, torch.zeros(1, 2))
             learning_rate = self.args.lr
             
-            print("Start fitting...")
-            results = [
+            
+            # Schedule calls for each worker concurrently:
+            results = await asyncio.gather( 
+                *[
                     cf.train_remote(
                         worker=worker[1],
                         traced_model=traced_model,
@@ -321,7 +323,7 @@ class Coordinator(mqtt.Client):
                     )
                     for worker in self.server._known_workers.items() if worker[0] != 'me'
             ]
-            print("Fitting ended!")
+            )
             models = {}
             loss_values = {}
 
@@ -400,7 +402,7 @@ def main(argv):
         print("You must provide a topic to clear.\n")
         sys.exit(2)
     
-    mqttc = Coordinator(15, remote)
+    mqttc = Coordinator(20, remote)
     rc = mqttc.run(host, port, topic, keepalive)
     # print("rc: "+str(rc))
 

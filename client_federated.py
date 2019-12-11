@@ -100,7 +100,7 @@ def train_local(worker, model, opt, epochs, federated_train_loader, args):
     return model, loss
 
 # TODO implements the asynchronous! Because it could require a lot of time
-def train_remote(
+async def train_remote(
     worker: websocket_client.WebsocketClientWorker,
     traced_model: torch.jit.ScriptModule,
     batch_size: int,
@@ -136,7 +136,7 @@ def train_remote(
     )
 
     train_config.send(worker)
-    loss = worker.fit(dataset_key="training", return_ids=[0])
+    loss = await worker.async_fit(dataset_key="training", return_ids=[0])
     model = train_config.model_ptr.get().obj
     return worker.id, model, loss
 
