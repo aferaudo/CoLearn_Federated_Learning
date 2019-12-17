@@ -23,7 +23,11 @@ parser.add_argument(
 )
 parser.add_argument("--output", "-o", type=str, required=True, help="csv output file")
 
-def generate(input_file, output_file):
+parser.add_argument("--extract", "-e", type=bool, nargs='?',
+                        const=True, default=False,
+                        help="Extract 10 useful features")
+
+def generate(input_file, output_file, extract):
 
     df = pd.read_csv(input_file)
 
@@ -43,9 +47,19 @@ def generate(input_file, output_file):
     df.columns = map(str.lower, df.columns)
     df = df.rename(columns=mapping, errors="raise")
 
-    # sns.barplot(df['proto'], df['attack'])
-    # plt.show()
-
+    # State number dict
+    state_numbers = {
+        'RST': 1,
+        'CON': 2,
+        'REQ': 3,
+        'INT': 4,
+        'URP': 5,
+        'FIN': 6,
+    }
+    df['state_number'] = df['state'].map(state_numbers)
+    index_nan_state_number = df.loc[pd.isna(df['state_number'])].index
+    df.loc[index_nan_state_number, 'state_number'] = -1
+    df = df.astype({'state_number':'int64'})
     # Due to the existence of certain protocols (ARP), source and destination
     # port number values were missing (not applicable), as such, these values
     # were set to -1,
@@ -126,12 +140,14 @@ def generate(input_file, output_file):
 
     # Numbers of packets grouped by state of flows and protocols per source IP
     df['Pkts_P_State_P_Protocol_P_SrcIP'] = df.groupby(['state','proto', 'saddr'])['pkts'].transform('sum')
- 
+    
+    if extract:
+        df = df[['seq', 'stddev', 'N_IN_Conn_P_SrcIP','min', 'state_number', 'mean', 'N_IN_Conn_P_DstIP', 'drate', 'srate', 'max']]
     df.to_csv(output_file, float_format='%.3f')
 
 
 def main(args):
-    generate(args.input, args.output)
+    generate(args.input, args.output, args.extract)
 
 if __name__ == "__main__":
 
