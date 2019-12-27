@@ -2,12 +2,13 @@ import re
 # Typical string (ip_address, state)
 # TODO add more states (for example when a client is not available anymore)
 states = ["TRAINING", "INFERENCE", "NOT_READY"]
+# TODO solve the space problem
 
 class EventParser():
     def __init__(self, message):
         # The message received is typically encoded in binary
         # So, must be transformed in string
-        self.message = message.decode('utf-8')
+        self.message = message.decode('utf-8').replace(" ","")
 
     
     def ip_address(self):
@@ -26,7 +27,10 @@ class EventParser():
         else:
             return -1
     
-    def port(self):
+    def port(self, local=False):
+        if local:
+            return -1
+        
         # 1) remove the brackets
         to_parse = re.sub(r'[\(\)]', '', self.message)
 
@@ -39,13 +43,17 @@ class EventParser():
         else:
             return -1
 
-    def state(self):
+    def state(self, local=False):
         # Now the string must be parsed, in order to obtain the event sent by the device (which represent its state)
         # 1) remove the brackets
         to_parse = re.sub(r'[\(\)]', '', self.message)
 
         # 2) obtain the state
-        state = re.split(r', ', to_parse)[2]
+        if local:
+            state = re.split(r',', to_parse)[1]
+        else:
+            state = re.split(r',', to_parse)[2]
+        
         if state in states:
             return state
         else:

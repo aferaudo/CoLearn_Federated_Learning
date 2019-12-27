@@ -7,6 +7,7 @@ import asyncio
 import syft as sy
 from syft.workers import websocket_client
 from syft.frameworks.torch.federated import utils
+import settings
 
 
 class Net(nn.Module):
@@ -134,7 +135,8 @@ async def train_remote(
         optimizer=optimizer,
         optimizer_args={"lr": lr},
     )
-
+    # When the training is started this remote worker can be removed from the devices to be trainind
+    del settings.training_devices[worker.id] 
     train_config.send(worker)
     loss = await worker.async_fit(dataset_key="training", return_ids=[0])
     model = train_config.model_ptr.get().obj

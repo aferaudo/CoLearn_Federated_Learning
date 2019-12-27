@@ -1,3 +1,7 @@
+# How to use example:
+# python remote_worker.py --host 192.168.1.183 -p 8778 -b localhost -t "topic/state" -w 1 -e "TRAINING" --verbose
+# THE HOST (--host) MUST BE SPECIFIED AS AN IP (also for localhost communication)
+
 import argparse
 
 import torch as th
@@ -9,12 +13,14 @@ import numpy as np
 
 from torchvision import datasets, transforms # datasets is used only to do some tests
 
+
+
 # Arguments
 parser = argparse.ArgumentParser(description="Run websocket server worker.")
 parser.add_argument(
     "--port", "-p", type=int, default=8777, help="port number of the websocket server worker, e.g. --port 8777"
 )
-parser.add_argument("--host", type=str, required=True, help="host for the connection")
+parser.add_argument("--host", type=str, required=True, help="host for the connection: represent the ip address of the network interface where the communication will happen")
 
 parser.add_argument(
     "--broker", "-b", type=str, required=True, help="Broker of the mqtt protocol"
