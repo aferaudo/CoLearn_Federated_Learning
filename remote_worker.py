@@ -12,7 +12,7 @@ from threading import Timer
 import numpy as np
 
 from torchvision import datasets, transforms # datasets is used only to do some tests
-
+from datasets import NetworkTrafficDataset, ToTensor, Normalize
 
 
 # Arguments
@@ -35,21 +35,17 @@ parser.add_argument(
     "--event", "-e", type=str, default="TRAINING", help="state of the client (TRAINING, INFERENCE, NOT_READY), e.g. --event TRAINING"
 )
 parser.add_argument(
+    "--training", "-dt", type=str, default=None, help="data training path"
+)
+parser.add_argument(
+    "--inference", "-di", type=str, default=None, help="data inference path"
+)
+parser.add_argument(
     "--verbose",
     "-v",
     action="store_true",
     help="if set, websocket server worker will be started in verbose mode",
 )
-
-def publish_event(broker, topic, event):
-    # Create a client object
-    client = mqtt.Client("woker")
-
-    # Connect to the broker
-    client.connect(broker)
-
-    # Publish the envet
-    client.publish(topic, event)
 
 
 # This script creates a worker and populate it with some toy data using worker.add_dataset, the dataset is identified by a key in this case xor.
@@ -75,18 +71,36 @@ def main(args):  # pragma: no cover
     # String to publish
 
     to_publish = '('+ args.host + ', ' + str(args.port) +', ' + args.event +')'
-    # Setup toy data (xor example)
-    data = th.tensor([[0.0, 1.0], [1.0, 0.0], [1.0, 1.0], [0.0, 0.0]], requires_grad=True)
-    target = th.tensor([[1.0], [1.0], [0.0], [0.0]], requires_grad=False)
     
-    x = th.tensor([[0.0, 1.0], [1.0, 0.0], [1.0, 1.0], [0.0, 0.0]],requires_grad=False).tag("inference")
+
+    if args.training == None:
+        # Setup toy data
+        data = th.tensor([[0.0, 1.0], [1.0, 0.0], [1.0, 1.0], [0.0, 0.0]], requires_grad=True)
+        target = th.tensor([[1.0], [1.0], [0.0], [0.0]], requires_grad=False)
+        # Create a dataset using the toy data
+        dataset = sy.BaseDataset(data, target)
+    else:
+        batch_size = 3 
+        print(args.training)
+        apply = transforms.Compose([ToTensor(), Normalize()])
+        dataset = NetworkTrafficDataset(args.training, transform=apply)
+
+    
+    dataloader = th.utils.data.DataLoader(dataset, shuffle=True)
+    for data, target in dataloader:
+        print("DATA: " + str(data))
+        print("TARGET: " + str(target))
+    
+    if args.inference == None:
+        # Setup toy data
+        y = th.tensor([[0.0, 1.0], [1.0, 0.0], [1.0, 1.0], [0.0, 0.0]],requires_grad=False).tag("inference")
+    else:
+        # TODO change with the real dataset
+        y = th.tensor([[0.0, 1.0], [1.0, 0.0], [1.0, 1.0], [0.0, 0.0]],requires_grad=False).tag("inference")
 
     # Create websocket worker
-    worker = WebsocketServerWorker(data=[x], **kwargs)
+    worker = WebsocketServerWorker(data=[y], **kwargs)
     
-    # Create a dataset using the toy data
-    dataset = sy.BaseDataset(data, target)
-
     # Tell the worker about the dataset
     worker.add_dataset(dataset, key="training")
 

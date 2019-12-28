@@ -4,6 +4,9 @@
 # TODO Delete the print and add a logger
 # TODO What happen if the coordinator receives event during a training phase?
 # TODO Menage the error cases in training phase: (1) remove all known worker for training or (2) recall the method and try to avoid the error
+# TODO websocket Server side has a problem when the connection is closed: It continous to wait from the same client, even if the connection has been closed. There is a way to stop the process?
+# TODO Close the socket after the training (not in the client_federated file but here)
+# TODO Check the torch.jit.trace
 
 # Be aware of these cases:
 # 1) What happen if a new device desires to do the training after the window?
@@ -47,6 +50,7 @@ from torchvision import datasets, transforms # datasets is used only to do some 
 from event_parser import EventParser
 import client_federated as cf
 import settings
+from datasets import NetworkTrafficDataset, ToTensorLong, ToTensor
 from threading import Timer
 
 # This is important to exploit the GPU if it is available
@@ -75,6 +79,7 @@ class Arguments():
         self.seed = 1
         self.log_interval = 30
         self.save_model = False
+        self.test_path = "/Users/angeloferaudo/Downloads/UNSW_2018_IoT_Botnet_Final_10_best_Training_1_1.csv" # Insert the path for the testing evaluation
 
 class Coordinator(mqtt.Client):
     def __init__(self, window, remote):
@@ -106,7 +111,7 @@ class Coordinator(mqtt.Client):
      
         
         if not self.remote:
-            # In case of local testing the event syntax is a bit different: 
+            # In case of local testing the event syntax is a bit different: e.g.
             # "(192.168.1.3,TRAINING)"
             print("Local testing")
 
@@ -137,7 +142,7 @@ class Coordinator(mqtt.Client):
                     # Create remote Worker
                     if port != -1:
                         identifier = ip_address + ":" + str(port)
-                        print("Remore worker idetifier: " + identifier)
+                        print("Remote worker idetifier: " + identifier)
                         kwargs_websocket = {"host": ip_address, "hook": self.__hook, "verbose": True}
                         worker = WebsocketClientWorker(id=identifier, port=port, **kwargs_websocket)
                         settings.training_devices[worker.id] = worker
@@ -210,6 +215,9 @@ class Coordinator(mqtt.Client):
                             print(prediction_pointer.get())
 
                         del self.server._known_workers[worker.id]
+
+                        # After the inference, close the ws with the server
+                        worker.close()
                     else:
                         print("Inference data not found!")
                 else:
@@ -244,10 +252,11 @@ class Coordinator(mqtt.Client):
         self.connect(host, port)
         self.subscribe(topic, 0)
 
-        rc = 0
-        while rc == 0:
-            rc = self.loop_forever()
-        return rc
+        print("Coordinator started. Press CTRL-C to stop")
+        try:
+            self.loop_forever()
+        except KeyboardInterrupt:
+            print("Coordinator stopped.")
     
 
     # The local case is useful only for testing purposes
@@ -341,16 +350,27 @@ class Coordinator(mqtt.Client):
             # The model must be loaded each time that we do the training
             if not os.path.exists(self.path): # If the model doesn't exist we create a new one
                 print("No existing model")
-                model = cf.TestingRemote()
+                # Settinf common hyperparameters
+                # input_dim = 10 #Here typically they use the shape
+                # output_dim = 1
+                # n_layers = 2
+
+                # model = cf.GRUModel(input_dim, 10, output_dim, n_layers)
+                # hidden = model.init_hidden(self.args.batch_size)
+                # test_seq = torch.LongTensor(1,10).to(device)
+                model = cf.TestingRemote2()
+                model = model.float() # I don't know if this is correct, but with this the method works
+                # model = cf.TestingRemote()
             else:
-                model = cf.TestingRemote()
+                model = cf.TestingRemote2()
                 model.load_state_dict(torch.load(self.path))
 
             print("Remote method")
             self.event_served = 0
             # Remember that the serializable model requires a starting point:
             # for this reason we pass the mockdata: torch.zeros([1, 1, 28, 28]
-            traced_model = torch.jit.trace(model, torch.zeros(1, 2))
+            # traced_model = torch.jit.trace(model, torch.zeros(1, 2))
+            traced_model = torch.jit.trace(model, torch.zeros(10))
             learning_rate = self.args.lr
             
             
@@ -385,10 +405,16 @@ class Coordinator(mqtt.Client):
             # Apply the federated averaging algorithm
             model = utils.federated_avg(models)
             print(model)
-            # print(settings.training_devices)
-            # print(self.server._known_workers)
+            print("After training: Training devices " + str(settings.training_devices))
+            print("After training: Known workers " + str(self.server._known_workers))
+            print(self.server._objects)
             # After the training we save the model
             torch.save(model.state_dict(), self.path)
+
+            # Evaluation of the model
+            test_dataset = NetworkTrafficDataset(self.args.test_path, transform=ToTensor())
+            test_loader = torch.utils.data.DataLoader(test_dataset, shuffle=True)
+            cf.evaluate(test_loader,device)
 
             # Window restart
             self.event_served = 0
@@ -451,8 +477,8 @@ def main(argv):
         print("You must provide a topic to clear.\n")
         sys.exit(2)
     
-    mqttc = Coordinator(20, remote)
-    rc = mqttc.run(host, port, topic, keepalive)
+    mqttc = Coordinator(1, remote)
+    mqttc.run(host, port, topic, keepalive)
     # print("rc: "+str(rc))
 
 if __name__ == "__main__":
