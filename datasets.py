@@ -2,8 +2,9 @@ import torch
 import numpy as np
 import pandas as pd
 
+from sklearn.preprocessing import MinMaxScaler
 from torch.utils.data import Dataset
-
+# Add standardization of the data
 # This is important to exploit the GPU if it is available
 use_cuda = torch.cuda.is_available()
 
@@ -26,8 +27,14 @@ class NetworkTrafficDataset(Dataset):
         """
         self.df = pd.read_csv(csv_file)
         self.df = self.df[['attack','seq', 'stddev', 'N_IN_Conn_P_SrcIP','min', 'state_number', 'mean', 'N_IN_Conn_P_DstIP', 'drate', 'srate', 'max']] # This must be more dynamic, like using some parameters
-        self.label = self.df.iloc[:,-1]
+        # Preprocessing phase
+        data_sc = MinMaxScaler() # Normalization to [0,1] range
+        self.data = data_sc.fit_transform(self.df.values[:, 1:])
+        # print(self.data)
+        self.labels = self.df.iloc[:,0]
+        # print(self.labels)
         self.transform = transform
+        # Maybe we need also the standardization this is due to the fact that my data has input values with differing scales
     
     def __len__(self):
         return len(self.df)
@@ -36,10 +43,10 @@ class NetworkTrafficDataset(Dataset):
 
         if torch.is_tensor(idx):
             idx = idx.tolist()
-        
-        data = self.df.iloc[idx, 1:]
+    
+        data = self.data[idx]
         data = np.array(data)
-        label = self.df.iloc[idx, 0]
+        label = self.labels[idx]
         label = np.array([label])
 
         if self.transform:
@@ -54,15 +61,19 @@ class ToTensor(object):
     def __call__(self, sample):
         # print(sample.shape)
         x = torch.from_numpy(sample)
+        # print(sample)
         x = x.to(device).float()
         # print(x.size())
         return x
 
 class Normalize(object):
-    """Convert ndarrays in sample to Tensors."""
+    """Normalization of the Tensors"""
 
     def __call__(self, sample):
+        # print("Before transposing: " + sample)
+        # print("After transposing: " + torch.transpose(sample, 0, 1))
         x_max = torch.max(sample)
+        # print(x_max) # So, in this case the maximum is the one of each row, so we have to reshape the matrix before to do this operation
         x_min = torch.min(sample)
         return (sample - (x_max + x_min)/2)/((x_max + x_min)/2)
 
@@ -73,5 +84,4 @@ class ToTensorLong(object):
         # print(sample.shape)
         x = torch.from_numpy(sample)
         x = x.long().to(device)
-        print(x)
         return x

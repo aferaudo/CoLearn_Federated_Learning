@@ -51,14 +51,16 @@ class TestingRemote(nn.Module):
 class TestingRemote2(nn.Module):
     def __init__(self):
         super(TestingRemote2, self).__init__()
-        self.fc1 = nn.Linear(10, 20)
-        self.fc2 = nn.Linear(20, 10)
-        self.fc3 = nn.Linear(10, 1)
+        self.fc1 = nn.Linear(10, 50)
+        self.fc2 = nn.Linear(50, 30)
+        self.fc3 = nn.Linear(30, 10)
+        self.fc4 = nn.Linear(10, 1)
     
     def forward(self, x):
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
-        x = self.fc3(x)
+        x = F.relu(self.fc3(x))
+        x = self.fc4(x)
         return x
 
 class GRUModel(nn.Module):
@@ -177,15 +179,17 @@ async def train_remote(
         optimizer_args={"lr": lr},
     )
     # When the training is started this remote worker can be removed from the devices to be training
-    del settings.training_devices[worker.id] 
+    
     try: 
         train_config.send(worker)
         loss = await worker.async_fit(dataset_key="training", return_ids=[0])
         model = train_config.model_ptr.get().obj
     finally:
         # After the training, close the websocket with the server
-        worker.close()
-
+        # worker.close()
+        print("Training ended")
+    del settings.training_devices[worker.id]
+     
     return worker.id, model, loss
 
 
@@ -213,11 +217,21 @@ def evaluate(test_loader, device):
     with torch.no_grad():
         for data, target in test_loader:
             data, target = data.to(device), target.to(device)
-            output = model(data)
-            print(output)
-            test_loss += criterion(output, target).item()# sum up batch loss
-            pred = output.argmax(1, keepdim=True) # get the index of the max log-probability 
-            correct += pred.eq(target.view_as(pred)).sum().item()
+            pred = model(data)
+            pred = pred.round()
+            test_loss += criterion(pred, target).item()# sum up batch loss
+            #pred = output.argmax(1, keepdim=True) # get the index of the max log-probability 
+            # print("Prediction: " + str(pred))
+            temp = pred.eq(target.view_as(pred)).sum().item()
+            # print(temp)
+            if temp == 1:
+                correct += pred.eq(target.view_as(pred)).sum().item()
+            else:
+                print("Prediction uncorrect: " + str(pred))
+                print("Data: ")
+                print(data)
+                print("Target: ")
+                print(target)
     
     test_loss /= len(test_loader.dataset)
     print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(

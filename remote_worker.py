@@ -1,6 +1,7 @@
+# TODO Specify in the thesis that this implementation doesn't have any kind of logic! The logic will be realized in future versions-
 # How to use example:
-# python remote_worker.py --host 192.168.1.183 -p 8778 -b localhost -t "topic/state" -w 1 -e "TRAINING" --verbose
-# THE HOST (--host) MUST BE SPECIFIED AS AN IP (also for localhost communication)
+# python remote_worker.py --host 127.0.0.1 -p 8778 -b localhost -t "topic/state" -w 1 -e "TRAINING" --verbose <-dt> <data available for training> <-di> <data available for inference>
+# THE HOST (--host) MUST BE SPECIFIED AS AN IP (also for localhost communication), instead no problem for the broker
 
 import argparse
 
@@ -35,10 +36,10 @@ parser.add_argument(
     "--event", "-e", type=str, default="TRAINING", help="state of the client (TRAINING, INFERENCE, NOT_READY), e.g. --event TRAINING"
 )
 parser.add_argument(
-    "--training", "-dt", type=str, default=None, help="data training path"
+    "--training", "-dt", type=str, default=None, help="data training path. This will be mandatory in future versions"
 )
 parser.add_argument(
-    "--inference", "-di", type=str, default=None, help="data inference path"
+    "--inference", "-di", type=str, default=None, help="data inference path. This will be mandatory in future versions"
 )
 parser.add_argument(
     "--verbose",
@@ -82,14 +83,14 @@ def main(args):  # pragma: no cover
     else:
         batch_size = 3 
         print(args.training)
-        apply = transforms.Compose([ToTensor(), Normalize()])
+        apply = transforms.Compose([ToTensor()])
         dataset = NetworkTrafficDataset(args.training, transform=apply)
 
     
-    dataloader = th.utils.data.DataLoader(dataset, shuffle=True)
-    for data, target in dataloader:
-        print("DATA: " + str(data))
-        print("TARGET: " + str(target))
+    # dataloader = th.utils.data.DataLoader(dataset, shuffle=True)
+    # for data, target in dataloader:
+    #     print("DATA: " + str(data))
+    #     print("TARGET: " + str(target))
     
     if args.inference == None:
         # Setup toy data

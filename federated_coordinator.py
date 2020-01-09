@@ -7,6 +7,7 @@
 # TODO websocket Server side has a problem when the connection is closed: It continous to wait from the same client, even if the connection has been closed. There is a way to stop the process?
 # TODO Close the socket after the training (not in the client_federated file but here)
 # TODO Check the torch.jit.trace
+# TODO Manage the reception of an event during the training: now we have the error in the following line: start_loop = lambda : asyncio.new_event_loop().run_until_complete(self.__starting_training_remote())
 
 # Be aware of these cases:
 # 1) What happen if a new device desires to do the training after the window?
@@ -69,17 +70,17 @@ device = torch.device("cuda" if use_cuda else "cpu")
 
 class Arguments():
     def __init__(self):
-        self.batch_size = 64
-        self.test_batch_size = 1000
-        self.epochs = 100 # Remember to change the number of epochs
-        self.federate_after_n_batches = 10
+        self.batch_size = 10
+        self.test_batch_size = 1024
+        self.epochs = 1 # Remember to change the number of epochs
+        self.federate_after_n_batches = -1 # In this way it will not be stopped during the training
         self.lr = 0.01
         self.momentum = 0.5
         self.no_cuda = False
         self.seed = 1
         self.log_interval = 30
         self.save_model = False
-        self.test_path = "/Users/angeloferaudo/Downloads/UNSW_2018_IoT_Botnet_Final_10_best_Training_1_1.csv" # Insert the path for the testing evaluation
+        self.test_path = "/Users/angeloferaudo/Downloads/UNSW_2018_IoT_Botnet_Final_10_best_Training_2.csv" # Insert the path for the testing evaluation
 
 class Coordinator(mqtt.Client):
     def __init__(self, window, remote):
@@ -109,7 +110,7 @@ class Coordinator(mqtt.Client):
         # Obtain ip address
         ip_address = parser.ip_address()
      
-        
+        worker = None
         if not self.remote:
             # In case of local testing the event syntax is a bit different: e.g.
             # "(192.168.1.3,TRAINING)"
@@ -117,37 +118,30 @@ class Coordinator(mqtt.Client):
 
             # Obtain the state of the server
             state = parser.state(local=True)
+            if ip_address != -1 and state != None:
+                worker = sy.VirtualWorker(self.__hook, ip_address)
+            else:
+                print("Ip address or state not valid") 
 
-            # Obtain the port for the remoteworker (Server)
-            port = parser.port(local=True)
         else:
+            print("Remote execution")
             state = parser.state()
-            port = parser.port()        
+            port = parser.port()
+            # Create remote Worker
+            if port != -1 and ip_address != -1 and state != None:
+                identifier = ip_address + ":" + str(port)
+                print("Remote worker idetifier: " + identifier)
+                kwargs_websocket = {"host": ip_address, "hook": self.__hook, "verbose": True}
+                worker = WebsocketClientWorker(id=identifier, port=port, **kwargs_websocket)
+            else:
+                print("Server worker: syntax event error")
         
-        
-        if ip_address != -1 and state != None:
-            print(ip_address + " " + state + " " + str(port))
             
-            
+        if worker != None:
             # TRAINING
             if state == "TRAINING":
                 self.event_served += 1
-                
-                if not self.remote:
-                    # Create Virtual Worker
-                    print("Local Execution")
-                    worker = sy.VirtualWorker(self.__hook, ip_address) 
-                    settings.training_devices[worker.id] = worker # registration
-                else:
-                    # Create remote Worker
-                    if port != -1:
-                        identifier = ip_address + ":" + str(port)
-                        print("Remote worker idetifier: " + identifier)
-                        kwargs_websocket = {"host": ip_address, "hook": self.__hook, "verbose": True}
-                        worker = WebsocketClientWorker(id=identifier, port=port, **kwargs_websocket)
-                        settings.training_devices[worker.id] = worker
-                    else:
-                        print("Server worker: " + ip_address + " port not valid!")
+                settings.training_devices[worker.id] = worker # registration
 
                 # [print(worker1[1]) for worker1 in self.server._known_workers.items() if worker1[0] != 'me']
                 print(worker)
@@ -166,8 +160,6 @@ class Coordinator(mqtt.Client):
                         t = Timer(self.window, self.__starting_training)
                         t.start()
                     
-                    
-
             elif state == "INFERENCE":
                 if self.remote:
                     # Infernce is implemented only for remote case, because is useless in the local case
@@ -182,18 +174,7 @@ class Coordinator(mqtt.Client):
                         print('Loading model')
                         model = cf.TestingRemote()
                         model.load_state_dict(torch.load(self.path))
-                    
-                    if self.remote:
-                        # Obtain Client worker
-                        if port != -1:
-                            kwargs_websocket = {"host": ip_address, "hook": self.__hook, "verbose": True}
-                            worker = WebsocketClientWorker(id=identifier, port=port, **kwargs_websocket)
-                        else:
-                            print("Server worker: " + ip_address + " port not valid!")
-                    else:
-                        print("Local inference not implemented!")
-                    
-
+            
                     # Obtain pointer to the data
                     data_pointer = worker.search("inference")# This return a list, we take only the first element
                     print(data_pointer)
@@ -210,6 +191,7 @@ class Coordinator(mqtt.Client):
 
                         # Apply the model to the data
                         with torch.no_grad():
+                            # TODO Define a behaviour in case of anomaly detected!
                             output_pointer = model(data_pointer)
                             prediction_pointer = output_pointer.argmax(1, keepdim=True)
                             print(prediction_pointer.get())
@@ -224,7 +206,7 @@ class Coordinator(mqtt.Client):
                     print("Inference not implemented for local purpose")
         
             elif state == "NOT_READY":
-                # TODO When a client is no more available we have to remove it from the workers list (training, inference or both?)
+                # This method is useful in training case only
                 print(ip_address + " is not ready anymore, removing from the known lists")
                 if remote:
                     identifier = ip_address + ":" + str(port)
@@ -238,11 +220,8 @@ class Coordinator(mqtt.Client):
             
             print("Training devices: " + str(settings.training_devices))
             print("All known workers: " + str(self.server._known_workers))
-
-            
         else:
-            # TODO What we have to do if the ip or the state is not valid
-            print("not ok!")
+            print("Some problems occurred")
 
     def on_publish(self, mqttc, obj, mid):
         print("mid: "+str(mid))
@@ -330,9 +309,6 @@ class Coordinator(mqtt.Client):
             # TODO Decide the correct behaviour: continue? Or throw everithing away?
             print("something")
 
-        # TODO Now in both the case, (1)when we have an adequate number of client and (2) when not, 
-        # The window will be recreated at the next event (This beharviour is correct?)
-        # Window restart
         self.event_served = 0
 
     async def __starting_training_remote(self):
@@ -373,7 +349,6 @@ class Coordinator(mqtt.Client):
             traced_model = torch.jit.trace(model, torch.zeros(10))
             learning_rate = self.args.lr
             
-            
             # Schedule calls for each worker concurrently:
             results = await asyncio.gather( 
                 *[
@@ -400,15 +375,16 @@ class Coordinator(mqtt.Client):
 
                 # When the training is ended this remote worker can be removed from the devices to be trainind
                 del self.server._known_workers[worker_id]
-            print(models)
+            print(models) # Logging purposes
 
             # Apply the federated averaging algorithm
             model = utils.federated_avg(models)
-            print(model)
+            print(model) # Logging purposes
             print("After training: Training devices " + str(settings.training_devices))
             print("After training: Known workers " + str(self.server._known_workers))
-            print(self.server._objects)
-            # After the training we save the model
+            # print(self.server._objects) # Logging purposes
+            
+            # After the training we save the model 
             torch.save(model.state_dict(), self.path)
 
             # Evaluation of the model
@@ -420,9 +396,8 @@ class Coordinator(mqtt.Client):
             self.event_served = 0
         
         else:
-            # TODO Decide the correct behaviour: continue? Or throw everithing away?
+            # TODO Create a behaviour when we are under the threshold
             print("something")
-
 
     def __remove_safely_known_workers(self, key=None, training=False):
         # This method is used only for local purpose
@@ -445,6 +420,30 @@ class Coordinator(mqtt.Client):
             del self.server._known_workers[key]
             
 
+    def _ciao():
+        print("LA MADONNA DI POMPEI")
+        # identifier = ip_address + ":" + str(port)
+        # kwargs_websocket = {"host": ip_address, "hook": self.__hook, "verbose": True}
+        # worker = WebsocketClientWorker(id=identifier, port=port, **kwargs_websocket)
+        # return worker
+        # if self.remote:
+        #     # REMOTE CASE
+        #     if port != -1:
+        #         identifier = ip_address + ":" + str(port)
+        #         print("Remote worker idetifier: " + identifier)
+        #         print("we are here")
+        #         kwargs_websocket = {"host": ip_address, "hook": self.__hook, "verbose": True}
+        #         worker = WebsocketClientWorker(id=identifier, port=port, **kwargs_websocket)
+        #     else:
+        #         print("Server worker: " + ip_address + " port not valid!")
+        #     return worker
+        # else:
+        #     # LOCAL CASE
+        #     # In this case we have only the training phase
+        #     # Create the worker and register it 
+        #     worker = sy.VirtualWorker(self.__hook, ip_address) 
+        #     settings.training_devices[worker.id] = worker 
+        #     return worker # In this case is not important have a return statement
 
 def main(argv):
     host = "localhost"
@@ -477,7 +476,7 @@ def main(argv):
         print("You must provide a topic to clear.\n")
         sys.exit(2)
     
-    mqttc = Coordinator(1, remote)
+    mqttc = Coordinator(2, remote)
     mqttc.run(host, port, topic, keepalive)
     # print("rc: "+str(rc))
 

@@ -2,7 +2,7 @@ import re
 # Typical string (ip_address, state)
 # TODO add more states (for example when a client is not available anymore)
 states = ["TRAINING", "INFERENCE", "NOT_READY"]
-# TODO solve the space problem
+
 
 class EventParser():
     def __init__(self, message):
