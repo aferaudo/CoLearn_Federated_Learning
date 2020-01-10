@@ -7,6 +7,7 @@
 # TODO Check the torch.jit.trace
 # TODO Which is the behaviour when the connection is lost? It continues to wait? try it!
 # TODO Realise the external inference function
+# TODO create your own thread
 
 # Be aware of these cases:
 # 1) What happen if a new device desires to do the training after the window? --> solution of the todo
@@ -73,7 +74,7 @@ class Arguments():
         self.test_batch_size = 1024
         self.epochs = 1 # Remember to change the number of epochs
         # federated_after_n_batches: number of training steps performed on each remote worker before averaging
-        self.federate_after_n_batches = 10 # In this way it will not be stopped during the training
+        self.federate_after_n_batches = -1 # In this way it will not be stopped during the training
         self.lr = 0.01
         self.momentum = 0.5
         self.no_cuda = False
@@ -186,8 +187,8 @@ class Coordinator(mqtt.Client):
                                                                                                         args=self.args,
                                                                                                         general_known_workers=self.server._known_workers
                                                                                                         ))
-                        t = Timer(self.window, start_loop)
-                        t.start()
+                        self.local_thread = Timer(self.window, start_loop)
+                        self.local_thread.start()
 
                     else:
                         t = Timer(self.window, self.__starting_training)
@@ -275,6 +276,10 @@ class Coordinator(mqtt.Client):
             self.loop_forever()
         except KeyboardInterrupt:
             print("Coordinator stopped.")
+            if self.local_thread != None:
+                print("Cancelling the timer..")
+                self.local_thread.cancel() # This works only if the timer objects is in a waiting phase, otherwise thr training will go ahead in any case
+                print("Done")
     
     # The local case is useful only for testing purposes
     def __starting_training(self):
@@ -450,9 +455,9 @@ async def training_remote(lower_bound, upper_bound, path, args, general_known_wo
         torch.save(model.state_dict(), path)
 
         # Evaluation of the model
-        # test_dataset = NetworkTrafficDataset(args.test_path, transform=ToTensor())
-        # test_loader = torch.utils.data.DataLoader(test_dataset, shuffle=True)
-        # cf.evaluate(test_loader,device)
+        test_dataset = NetworkTrafficDataset(args.test_path, transform=ToTensor())
+        test_loader = torch.utils.data.DataLoader(test_dataset, shuffle=True)
+        cf.evaluate(test_loader,device)
         
         # Window restart
         settings.event_served = 0
