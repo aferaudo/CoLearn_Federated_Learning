@@ -113,7 +113,6 @@ def main(args):  # pragma: no cover
     # Start worker
     worker.start()
 
-    return worker
 
 
 if __name__ == "__main__":

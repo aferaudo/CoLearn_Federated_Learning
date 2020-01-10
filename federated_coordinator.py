@@ -34,9 +34,9 @@
 # python federated_coordinator -t "topic/state" # local case
 # python federated_coordinator -t "topic/state" -r # remote case
 
+import argparse
 
 import sys
-import getopt
 import torch
 import syft as sy
 import asyncio
@@ -73,7 +73,7 @@ class Arguments():
         self.batch_size = 10
         self.test_batch_size = 1024
         self.epochs = 1 # Remember to change the number of epochs
-        self.federate_after_n_batches = -1 # In this way it will not be stopped during the training
+        self.federate_after_n_batches = 100000 # In this way it will not be stopped during the training
         self.lr = 0.01
         self.momentum = 0.5
         self.no_cuda = False
@@ -81,6 +81,24 @@ class Arguments():
         self.log_interval = 30
         self.save_model = False
         self.test_path = "/Users/angeloferaudo/Downloads/UNSW_2018_IoT_Botnet_Final_10_best_Training_2.csv" # Insert the path for the testing evaluation
+
+# Arguments
+parser = argparse.ArgumentParser(description="Run Federated coordinator")
+parser.add_argument(
+    "--port", "-p", type=int, default=1883, help="port number of the where the broker is listining (default 1883)"
+)
+parser.add_argument("--host", type=str, default="localhost", help="broker ip address (default localhost)")
+
+parser.add_argument(
+    "--topic", "-t", type=str, required=True, help="topic where the event must be published"
+)
+parser.add_argument(
+    "--remote", "-r", action='store_true', help="Remote learning activation"
+)
+parser.add_argument(
+    "--window", "-w", type=int, default=1, help="temporal window size (default 1)"
+)
+
 
 class Coordinator(mqtt.Client):
     def __init__(self, window, remote):
@@ -132,7 +150,11 @@ class Coordinator(mqtt.Client):
                 identifier = ip_address + ":" + str(port)
                 print("Remote worker idetifier: " + identifier)
                 kwargs_websocket = {"host": ip_address, "hook": self.__hook, "verbose": True}
-                worker = WebsocketClientWorker(id=identifier, port=port, **kwargs_websocket)
+                try:
+                    worker = WebsocketClientWorker(id=identifier, port=port, **kwargs_websocket)
+                except:
+                    e = sys.exc_info()[0]
+                    print("Error " + str(e))
             else:
                 print("Server worker: syntax event error")
         
@@ -226,8 +248,7 @@ class Coordinator(mqtt.Client):
     def on_publish(self, mqttc, obj, mid):
         print("mid: "+str(mid))
 
-
-    def run(self, host, port, topic, keepalive):
+    def run(self, host, port, topic):
         self.connect(host, port)
         self.subscribe(topic, 0)
 
@@ -237,7 +258,6 @@ class Coordinator(mqtt.Client):
         except KeyboardInterrupt:
             print("Coordinator stopped.")
     
-
     # The local case is useful only for testing purposes
     def __starting_training(self):
         
@@ -420,65 +440,12 @@ class Coordinator(mqtt.Client):
             del self.server._known_workers[key]
             
 
-    def _ciao():
-        print("LA MADONNA DI POMPEI")
-        # identifier = ip_address + ":" + str(port)
-        # kwargs_websocket = {"host": ip_address, "hook": self.__hook, "verbose": True}
-        # worker = WebsocketClientWorker(id=identifier, port=port, **kwargs_websocket)
-        # return worker
-        # if self.remote:
-        #     # REMOTE CASE
-        #     if port != -1:
-        #         identifier = ip_address + ":" + str(port)
-        #         print("Remote worker idetifier: " + identifier)
-        #         print("we are here")
-        #         kwargs_websocket = {"host": ip_address, "hook": self.__hook, "verbose": True}
-        #         worker = WebsocketClientWorker(id=identifier, port=port, **kwargs_websocket)
-        #     else:
-        #         print("Server worker: " + ip_address + " port not valid!")
-        #     return worker
-        # else:
-        #     # LOCAL CASE
-        #     # In this case we have only the training phase
-        #     # Create the worker and register it 
-        #     worker = sy.VirtualWorker(self.__hook, ip_address) 
-        #     settings.training_devices[worker.id] = worker 
-        #     return worker # In this case is not important have a return statement
 
 def main(argv):
-    host = "localhost"
-   
-    keepalive = 60
-    port = 1883
-    topic = None
-    remote = False
-    
 
-    try:
-        opts, args = getopt.getopt(argv, "h:k:p:t:vr",
-                                   ["host","keepalive", "port",  "topic","remote"])
-    except getopt.GetoptError as s:
-        sys.exit(2)
-    for opt, arg in opts:
-        if opt in ("-h", "--host"):
-            host = arg
-        elif opt in ("-k", "--keepalive"):
-            keepalive = int(arg)
-        elif opt in ("-p", "--port"):
-            port = int(arg)
-        elif opt in ("-t", "--topic"):
-            topic = arg
-            print(topic)
-        elif opt in ("-r", "--remote"):
-            remote = True
-
-    if topic == None:
-        print("You must provide a topic to clear.\n")
-        sys.exit(2)
-    
-    mqttc = Coordinator(2, remote)
-    mqttc.run(host, port, topic, keepalive)
-    # print("rc: "+str(rc))
+    mqttc = Coordinator(args.window, args.remote)
+    mqttc.run(args.host, args.port, args.topic)
 
 if __name__ == "__main__":
-    main(sys.argv[1:])
+    args = parser.parse_args()
+    main(args)
