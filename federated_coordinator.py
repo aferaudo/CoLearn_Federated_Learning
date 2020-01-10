@@ -6,6 +6,7 @@
 # TODO Close the socket after the training (not in the client_federated file but here)
 # TODO Check the torch.jit.trace
 # TODO Which is the behaviour when the connection is lost? It continues to wait? try it!
+# TODO Realise the external inference function
 
 # Be aware of these cases:
 # 1) What happen if a new device desires to do the training after the window? --> solution of the todo
@@ -72,7 +73,7 @@ class Arguments():
         self.test_batch_size = 1024
         self.epochs = 1 # Remember to change the number of epochs
         # federated_after_n_batches: number of training steps performed on each remote worker before averaging
-        self.federate_after_n_batches = 10000 # In this way it will not be stopped during the training
+        self.federate_after_n_batches = 10 # In this way it will not be stopped during the training
         self.lr = 0.01
         self.momentum = 0.5
         self.no_cuda = False
@@ -135,8 +136,10 @@ class Coordinator(mqtt.Client):
 
             # Obtain the state of the server
             state = parser.state(local=True)
-            if ip_address != -1 and state != None:
+            if ip_address != -1 and state != None and state == "NOT_READY":
                 worker = sy.VirtualWorker(self.__hook, ip_address)
+            elif state == "NOT_READY":
+                print("NOT_READY state received")
             else:
                 print("Ip address or state not valid") 
 
@@ -145,7 +148,7 @@ class Coordinator(mqtt.Client):
             state = parser.state()
             port = parser.port()
             # Create remote Worker
-            if port != -1 and ip_address != -1 and state != None:
+            if port != -1 and ip_address != -1 and state != None and state != "NOT_READY":
                 identifier = ip_address + ":" + str(port)
                 print("Remote worker idetifier: " + identifier)
                 kwargs_websocket = {"host": ip_address, "hook": self.__hook, "verbose": True}
@@ -154,11 +157,14 @@ class Coordinator(mqtt.Client):
                 except:
                     e = sys.exc_info()[0]
                     print("Error " + str(e))
+
+            elif state == "NOT_READY":
+                print("NOT_READY state received")
             else:
-                print("Server worker: syntax event error")
+                print("Server worker: no worker gerated")
         
             
-        if worker != None:
+        if worker != None or state == "NOT_READY":
             # TRAINING
             if state == "TRAINING":
                 settings.event_served += 1
@@ -235,18 +241,25 @@ class Coordinator(mqtt.Client):
             elif state == "NOT_READY":
                 # This method is useful in training case only
                 print(ip_address + " is not ready anymore, removing from the known lists")
-                if remote:
-                    identifier = ip_address + ":" + str(port)
+                if self.remote:
+                    identifier = ip_address + ':' + str(port)
                 else:
                     identifier = ip_address
-                del settings.training_devices[identifier]
-                del self.server._known_workers[identifier]
+
+                if identifier in settings.training_devices.keys():
+                    if self.remote:
+                        worker = settings.training_devices.get(identifier)
+                        print("Worker to remove: ")
+                        print(worker)
+                        worker.close() # Close the connection in remote case
+                    del settings.training_devices[identifier]
+                    del self.server._known_workers[identifier]
 
             else:
                 print("No behavior defined for this event")
             
-            print("Training devices: " + str(settings.training_devices))
-            print("All known workers: " + str(self.server._known_workers))
+            print("ONMESSAGE: Training devices: " + str(settings.training_devices))
+            print("ONMESSAGE: All known workers: " + str(self.server._known_workers))
         else:
             print("Some problems occurred")
 
@@ -437,9 +450,9 @@ async def training_remote(lower_bound, upper_bound, path, args, general_known_wo
         torch.save(model.state_dict(), path)
 
         # Evaluation of the model
-        test_dataset = NetworkTrafficDataset(args.test_path, transform=ToTensor())
-        test_loader = torch.utils.data.DataLoader(test_dataset, shuffle=True)
-        cf.evaluate(test_loader,device)
+        # test_dataset = NetworkTrafficDataset(args.test_path, transform=ToTensor())
+        # test_loader = torch.utils.data.DataLoader(test_dataset, shuffle=True)
+        # cf.evaluate(test_loader,device)
         
         # Window restart
         settings.event_served = 0
