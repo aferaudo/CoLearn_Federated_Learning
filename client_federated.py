@@ -186,8 +186,8 @@ async def train_remote(
         model = train_config.model_ptr.get().obj
     finally:
         # After the training, close the websocket with the server
-        # worker.close()
-        print("Training ended")
+        worker.close()
+        print("Training ended and socket closed")
     print("Deleting worker: " + str(worker.id) + " from training devices")
     del settings.training_devices[worker.id]
      

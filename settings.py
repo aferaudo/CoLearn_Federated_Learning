@@ -7,4 +7,6 @@
 
 def init():
     global training_devices
+    global event_served
     training_devices = {}
+    event_served = 0
