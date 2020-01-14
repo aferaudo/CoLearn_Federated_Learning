@@ -48,9 +48,12 @@ class TestingRemote(nn.Module):
         x = self.fc3(x)
         return x
 
-class TestingRemote2(nn.Module):
+class FFNN(nn.Module):
+    """
+    Simple Binary FeedForward neural network
+    """
     def __init__(self):
-        super(TestingRemote2, self).__init__()
+        super(FFNN, self).__init__()
         self.fc1 = nn.Linear(10, 50)
         self.fc2 = nn.Linear(50, 30)
         self.fc3 = nn.Linear(30, 10)
@@ -60,8 +63,11 @@ class TestingRemote2(nn.Module):
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         x = F.relu(self.fc3(x))
-        x = self.fc4(x)
+        x = torch.sigmoid(self.fc4(x))
         return x
+    
+    def get_traced_model(self):
+        return torch.jit.trace(self, torch.zeros(10))
 
 class GRUModel(nn.Module):
     # To understand the meaning of this variable visit the page of pytorch: https://pytorch.org/docs/master/nn.html#gru
@@ -83,15 +89,29 @@ class GRUModel(nn.Module):
         weight = next(self.parameters()).data
         hidden = weight.new(self.n_layers, batch_size, self.hidden_dim).zero_().to(device)
         return hidden
+    
+    def get_traced_model(self, batch_size):
+        """This method returns the model instantiated in torch.jit.trace format
+        Args:
+            batch_size: Batch size of each training step
+        Returns:
+            traced_model: model in torch.jit.trace format
+        """
+        # TODO implement the number of layer --> Now the number of layer must be one this means: dropout = 0
+        hidden = self.init_hidden(batch_size)
+        input_rdn_data = torch.rand(1,1,10)
+        traced_model = torch.jit.trace(self, (input_rdn_data, hidden))
+        return traced_model
 
 # Loss function
 # it needs to be serializable. 
 #  We can define a usual function just changing it to use jit.
+# In this case is the mean square error
 @torch.jit.script
 def loss_fn(target, pred):
-    return ((target.view(pred.shape).float() - pred.float()) ** 2).mean()
+    # return ((target.view(pred.shape).float() - pred.float()) ** 2).mean()
     # or for example you can use
-    # return F.nll_loss(input=pred, target=target)
+    return F.binary_cross_entropy(input=pred, target=target)
 
 def train_local(worker, model, opt, epochs, federated_train_loader, args):
     # In this case the location of the worker is directly in the data
@@ -180,22 +200,22 @@ async def train_remote(
     )
     # When the training is started this remote worker can be removed from the devices to be training
     
-    try: 
-        train_config.send(worker)
-        loss = await worker.async_fit(dataset_key="training", return_ids=[0])
-        model = train_config.model_ptr.get().obj
-    finally:
-        # After the training, close the websocket with the server
-        worker.close()
-        print("Training ended and socket closed")
-    print("Deleting worker: " + str(worker.id) + " from training devices")
-    del settings.training_devices[worker.id]
+    # try: 
+    train_config.send(worker)
+    loss = await worker.async_fit(dataset_key="training", return_ids=[0])
+    model = train_config.model_ptr.get().obj
+    # finally:
+    #     # After the training, close the websocket with the server
+    #     worker.close()
+    #     print("Training ended and socket closed")
+    # print("Deleting worker: " + str(worker.id) + " from training devices")
+    # del settings.training_devices[worker.id]
      
     return worker.id, model, loss
 
 
 
-def evaluate(test_loader, device):
+def evaluate(model, test_loader, device):
     """Evaluate the model. This method can be used only for a local evaluation of the global model
     Args:
         model: model to evaluate
@@ -206,25 +226,21 @@ def evaluate(test_loader, device):
         no return
     """
     print("Local evaluation start...")
-    model = TestingRemote2()
-    model.load_state_dict(torch.load("./test.pth"))
     model.eval()
 
-    # Defining Loss Function and optimizer
-    criterion = nn.MSELoss()
 
     test_loss = 0
     correct = 0
     with torch.no_grad():
         for data, target in test_loader:
             data, target = data.to(device), target.to(device)
-            pred = model(data)
-            pred = pred.round()
-            test_loss += criterion(pred, target).item()# sum up batch loss
+            out = model(data)
+            test_loss += F.binary_cross_entropy(input=out, target=target).item() # Apply binary cross entropy for our binary nn
+            pred = torch.round(out) # Approximate the value to 1 or 0 to compute the correctiness of this prediction
             #pred = output.argmax(1, keepdim=True) # get the index of the max log-probability 
             # print("Prediction: " + str(pred))
             temp = pred.eq(target.view_as(pred)).sum().item()
-            # print(temp)
+            # # print(temp)
             if temp == 1:
                 correct += pred.eq(target.view_as(pred)).sum().item()
             else:
@@ -235,6 +251,6 @@ def evaluate(test_loader, device):
                 print(target)
     
     test_loss /= len(test_loader.dataset)
-    print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
+    print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.5f}%)\n'.format(
         test_loss, correct, len(test_loader.dataset),
         100. * correct / len(test_loader.dataset)))

@@ -7,7 +7,7 @@
 # TODO Check the torch.jit.trace
 # TODO Which is the behaviour when the connection is lost? It continues to wait? try it!
 # TODO Realise the external inference function
-# TODO create your own thread
+# TODO Complete closing when ctrl-c is called
 
 # Be aware of these cases:
 # 1) What happen if a new device desires to do the training after the window? --> solution of the todo
@@ -72,16 +72,19 @@ class Arguments():
     def __init__(self):
         self.batch_size = 10
         self.test_batch_size = 1024
-        self.epochs = 1 # Remember to change the number of epochs
+        self.epochs = 2 # Remember to change the number of epochs
         # federated_after_n_batches: number of training steps performed on each remote worker before averaging
         self.federate_after_n_batches = -1 # In this way it will not be stopped during the training
-        self.lr = 0.01
+        self.lr = 0.0001
         self.momentum = 0.5
         self.no_cuda = False
         self.seed = 1
         self.log_interval = 30
         self.save_model = False
-        self.test_path = "/Users/angeloferaudo/Downloads/UNSW_2018_IoT_Botnet_Final_10_best_Training_2.csv" # Insert the path for the testing evaluation
+        self.test_path = "/Users/angeloferaudo/Downloads/UNSW_2018_IoT_Botnet_Final_10_best_Training_1_1.csv" # Insert the path for the testing evaluation
+    
+    def set_federated_batches(self, batches):
+        self.federate_after_n_batches = batches
 
 # Arguments
 parser = argparse.ArgumentParser(description="Run Federated coordinator")
@@ -100,9 +103,19 @@ parser.add_argument(
     "--window", "-w", type=int, default=1, help="temporal window size (default 1)"
 )
 
+parser.add_argument(
+    "--federated_round", "-f", type=int, default=1, help="(work in progress) Enable or disable the rounds, if the round are activated the training is stopped after nbatches and then restarted (round must be greater then one)"
+)
 
 class Coordinator(mqtt.Client):
-    def __init__(self, window, remote):
+    def __init__(self, window, remote, federated_round):
+        """
+        This class is a client mqtt which waits for mqtt events in order to train and do inference on IoT devices
+        Args:
+            window: define the window dimension (collection of IoT devices before to start the training) in secs
+            remote: enable the Coordinator for remote training (if not specified the training is done in local only for test purpose)
+            federated_round: enabling the training in round, instead of having the training on all the data this will be done on 1000 data at time
+        """
         super(Coordinator, self).__init__()
         settings.init()
         self.training_lower_bound = 1
@@ -114,6 +127,7 @@ class Coordinator(mqtt.Client):
         self.window = window
         self.local_thread = None
         self.remote = remote
+        self.enabled_round = federated_round
         self.path = './test.pth' # Where the model is saved, and from is loaded
         self.args = Arguments()
         
@@ -185,8 +199,8 @@ class Coordinator(mqtt.Client):
                                                                                                         upper_bound=self.training_upper_bound,
                                                                                                         path=self.path,
                                                                                                         args=self.args,
-                                                                                                        general_known_workers=self.server._known_workers
-                                                                                                        ))
+                                                                                                        general_known_workers=self.server._known_workers,
+                                                                                                        round=self.enabled_round))
                         self.local_thread = Timer(self.window, start_loop)
                         self.local_thread.start()
 
@@ -279,6 +293,13 @@ class Coordinator(mqtt.Client):
             if self.local_thread != None:
                 print("Cancelling the timer..")
                 self.local_thread.cancel() # This works only if the timer objects is in a waiting phase, otherwise thr training will go ahead in any case
+                for key in self.server._known_workers.keys():
+                    if key == "me":
+                        pass
+                    else:
+                        worker = settings.training_devices[key]
+                        print("Closing socket for worker " + str(worker))
+                        worker.close()
                 print("Done")
     
     # The local case is useful only for testing purposes
@@ -289,7 +310,7 @@ class Coordinator(mqtt.Client):
         if len(settings.training_devices) >= self.training_lower_bound:
             
             if len(settings.training_devices)>= self.training_upper_bound:
-            #     # TODO apply a selection criteria
+            # TODO apply a selection criteria
                 print("To implement")
         
             
@@ -376,7 +397,7 @@ class Coordinator(mqtt.Client):
             del self.server._known_workers[key]
     
 
-async def training_remote(lower_bound, upper_bound, path, args, general_known_workers):
+async def training_remote(lower_bound, upper_bound, path, args, general_known_workers, round):
     # TODO Solve this problem: Returning the object as is.
     # warnings.warn('The input to trace is already a ScriptModule, tracing it is a no-op. Returning the object as is.')
     # I think that is due to the fact that the model is still serialized, so to solve this copy the weight in another
@@ -388,6 +409,7 @@ async def training_remote(lower_bound, upper_bound, path, args, general_known_wo
         path: path where the model could be stored
         args: argument for the training settings
         general_known_workers: all the known workers of the caller
+        round: is an integer which enables to do n cycles of training, instead of training on all the data in one time
     Returns:
         no return
     """
@@ -397,15 +419,19 @@ async def training_remote(lower_bound, upper_bound, path, args, general_known_wo
             # TODO apply a selection criteria: This depends on the execution environment
             print("To implement")
         
+        model = cf.FFNN()
         if not os.path.exists(path): # If the model doesn't exist we create a new one
             print("No existing model")               
-            model = cf.TestingRemote2() # This is a first example we can implement another selection criteria for the model 
+            # model = cf.FFNN() # This is a first example we can implement another selection criteria for the model 
             model = model.float() # I don't know if this is correct, but with this the method works
-
+            for param in model.parameters():
+                print(param.data)
         else:
             print("Loading of the model..")
-            model = cf.TestingRemote2()
+           
             model.load_state_dict(torch.load(path))
+            for param in model.parameters():
+                print(param.data)
             print("Model loading successfull")
     
         
@@ -413,51 +439,77 @@ async def training_remote(lower_bound, upper_bound, path, args, general_known_wo
         # Remember that the serializable model requires a starting point:
         # for this reason we pass the mockdata: torch.zeros([1, 1, 28, 28]
         # traced_model = torch.jit.trace(model, torch.zeros(1, 2))
-        traced_model = torch.jit.trace(model, torch.zeros(10))
+        traced_model = model.get_traced_model()
+        print(traced_model.code)
         learning_rate = args.lr
 
         print("Remote training on multiple devices started...")
         # Schedule calls for each worker concurrently:
-        results = await asyncio.gather( 
-            *[
-                cf.train_remote(
-                    worker=worker[1],
-                    traced_model=traced_model,
-                    batch_size=args.batch_size,
-                    optimizer="SGD",
-                    max_nr_batches=args.federate_after_n_batches,
-                    epochs=args.epochs,
-                    lr=learning_rate,
-                )
-                for worker in settings.training_devices.items() # maybe now it doesn't require the index (worker[1])
-        ]
-        )
-        models = {}
-        loss_values = {}
-        print("Remote training on multiple devices ended...")
+        if round > 1:
+            print("Round activated!")
+            args.set_federated_batches(1000)
+        
+        print("Federated batches: " + str(args.federate_after_n_batches))
+        for i in range(round):
+            results = await asyncio.gather( 
+                *[
+                    cf.train_remote(
+                        worker=worker[1],
+                        traced_model=traced_model,
+                        batch_size=args.batch_size,
+                        optimizer="SGD",
+                        max_nr_batches=args.federate_after_n_batches,
+                        epochs=args.epochs,
+                        lr=learning_rate,
+                    )
+                    for worker in settings.training_devices.items() # maybe now it doesn't require the index (worker[1])
+            ]
+            )
+            models = {}
+            loss_values = {}
+            print("Remote training on multiple devices ended...")
 
-        # Federate models (note that this will also change the model in models[0]
-        for worker_id, worker_model, worker_loss in results:
-            if worker_model is not None:
-                models[worker_id] = worker_model
-                loss_values[worker_id] = worker_loss
+            # Federate models (note that this will also change the model in models[0]
+            for worker_id, worker_model, worker_loss in results:
+                if worker_model is not None:
+                    models[worker_id] = worker_model
+                    print("Loss for worker id: " + str(worker_id) + " " + str(worker_loss))
+                
+            print(models) # Logging purposes
+            
+            # Just to log the parameters setting
+            # nr_models = len(models)
+            # for i in range(1, nr_models):
+            #     print(models[i])
+            #     for param in model.parameters():
+            #         print(param.data)
+            ###########
 
-            # When the training is ended this remote worker can be removed from the devices to be trainind
+            # Apply the federated averaging algorithm
+            model = utils.federated_avg(models) # Maybe here I've to use the traced_model
+            print(model) # Logging purposes
+            for param in model.parameters():
+                    print(param.data)
+
+        # Close all the sockets and delete the workers
+        for worker_id, _, _ in results:
+            print("Closing socket for " + str(worker_id))
+            worker = settings.training_devices[worker_id]
+            worker.close()
+
+            print("Deleting " + str(worker_id) + " from known worker")
+            del settings.training_devices[worker.id]
             del general_known_workers[worker_id]
-        print(models) # Logging purposes
-
-        # Apply the federated averaging algorithm
-        model = utils.federated_avg(models)
-        print(model) # Logging purposes
+        print("Done!")
         
 
         # After the training we save the model 
         torch.save(model.state_dict(), path)
 
         # Evaluation of the model
-        test_dataset = NetworkTrafficDataset(args.test_path, transform=ToTensor())
-        test_loader = torch.utils.data.DataLoader(test_dataset, shuffle=True)
-        cf.evaluate(test_loader,device)
+        # test_dataset = NetworkTrafficDataset(args.test_path, transform=ToTensor())
+        # test_loader = torch.utils.data.DataLoader(test_dataset, shuffle=True)
+        # cf.evaluate(model,test_loader,device)
         
         # Window restart
         settings.event_served = 0
@@ -466,8 +518,17 @@ async def training_remote(lower_bound, upper_bound, path, args, general_known_wo
         print("No behaviour defined for the number of devices achieved")
 
 def main(argv):
-    mqttc = Coordinator(args.window, args.remote)
+    # Model to test instance cration
+    # model = cf.GRUModel(input_dim=10, hidden_dim=10, output_dim=1, n_layers=1)
+    mqttc = Coordinator(args.window, args.remote, args.federated_round)
     mqttc.run(args.host, args.port, args.topic)
+    # model = cf.FFNN()
+    # model.load_state_dict(torch.load('./test.pth'))
+    # for param in model.parameters():
+    #     print(param.data)
+    # test_dataset = NetworkTrafficDataset("/Users/angeloferaudo/Downloads/UNSW_2018_IoT_Botnet_Final_10_best_Training_3.csv", transform=ToTensor())
+    # test_loader = torch.utils.data.DataLoader(test_dataset, shuffle=True)
+    # cf.evaluate(model,test_loader,device)
 
 if __name__ == "__main__":
 
