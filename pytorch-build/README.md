@@ -121,6 +121,7 @@ sudo pip3 install Flask flask-socketio lz4 msgpack websocket-client websockets z
 At this point you will have everything installed
 
 ## Install sklearn
+
 I had some problems also in this procedure.
 The problem in this case is the scipy installation. During this procedure, it is possible that the fortran library is missing. So, being based on fortran and C library, the procedure will be stopped and then reversed.
 To solve the problem first of all we need to install the fortran library.
