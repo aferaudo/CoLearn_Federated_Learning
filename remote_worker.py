@@ -12,7 +12,6 @@ import syft as sy
 from threading import Timer
 import numpy as np
 
-from torchvision import datasets, transforms # datasets is used only to do some tests
 from datasets import NetworkTrafficDataset, ToTensor, Normalize
 
 
@@ -83,8 +82,7 @@ def main(args):  # pragma: no cover
     else:
         batch_size = 3 
         print(args.training)
-        apply = transforms.Compose([ToTensor()])
-        dataset = NetworkTrafficDataset(args.training, transform=apply)
+        dataset = NetworkTrafficDataset(args.training, transform=ToTensor())
 
     
     # dataloader = th.utils.data.DataLoader(dataset, shuffle=True)

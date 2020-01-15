@@ -6,7 +6,6 @@
 # TODO Close the socket after the training (not in the client_federated file but here)
 # TODO Check the torch.jit.trace
 # TODO Which is the behaviour when the connection is lost? It continues to wait? try it!
-# TODO Realise the external inference function
 # TODO Complete closing when ctrl-c is called
 
 # Be aware of these cases:
