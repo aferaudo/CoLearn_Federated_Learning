@@ -153,3 +153,8 @@ So, I think that could be useful for you also this link:
 - [link1](https://medium.com/secure-and-private-ai-writing-challenge/a-step-by-step-guide-to-installing-pytorch-in-raspberry-pi-a1491bb80531)
 - [link2](https://medium.com/secure-and-private-ai-writing-challenge/a-step-by-step-guide-to-installing-pysyft-in-raspberry-pi-d8d10c440c37)
 - [link3](https://blog.openmined.org/federated-learning-of-a-rnn-on-raspberry-pis/) 
+
+
+## Raspberry PI 3b+ image
+
+If you are lazy, you can find the image [here](https://mega.nz/#!BUQhBQST!AwLQTJHmLbz2AMYjfReD_88oWlKQqRbQfX6L0GKZTJw)
