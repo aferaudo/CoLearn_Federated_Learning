@@ -31,7 +31,8 @@ class NetworkTrafficDataset(Dataset):
         data_sc = MinMaxScaler() # Normalization to [0,1] range
         self.data = data_sc.fit_transform(self.df.values[:, 1:])
         # print(self.data)
-        self.labels = self.df.iloc[:,0]
+        self.targets = self.df.iloc[:,0]
+        # self.targets = data_sc.fit_transform([self.df.values[:,0]])
         # print(self.labels)
         self.transform = transform
         # Maybe we need also the standardization this is due to the fact that my data has input values with differing scales
@@ -46,7 +47,8 @@ class NetworkTrafficDataset(Dataset):
     
         data = self.data[idx]
         data = np.array(data)
-        label = self.labels[idx]
+        # label = self.targets[0][idx]
+        label = self.targets[idx]
         label = np.array([label])
 
         if self.transform:

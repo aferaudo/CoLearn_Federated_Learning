@@ -3,11 +3,13 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import asyncio
+import time
 
 import syft as sy
 from syft.workers import websocket_client
-from syft.frameworks.torch.federated import utils
+# from syft.frameworks.torch.federated import utils
 import settings
+from datasets import NetworkTrafficDataset, ToTensor
 
 # This is important to exploit the GPU if it is available
 use_cuda = torch.cuda.is_available()
@@ -20,20 +22,32 @@ device = torch.device("cuda" if use_cuda else "cpu")
 class Net(nn.Module):
     def __init__(self):
         super(Net, self).__init__()
-        self.conv1 = nn.Conv2d(1, 20, 5, 1)
-        self.conv2 = nn.Conv2d(20, 50, 5, 1)
-        self.fc1 = nn.Linear(4*4*50, 500)
-        self.fc2 = nn.Linear(500, 10)
-    
+        self.fc1 = nn.Linear(28 * 28, 128)
+        self.fc2 = nn.Linear(128, 64)
+        self.fc3 = nn.Linear(64, 10)
+
     def forward(self, x):
-        x = F.relu(self.conv1(x))
-        x = F.max_pool2d(x, 2, 2)
-        x = F.relu(self.conv2(x))
-        x = F.max_pool2d(x, 2, 2)
-        x = x.view(-1, 4*4*50)
+        x = x.view(-1, 28 * 28)
         x = F.relu(self.fc1(x))
-        x = self.fc2(x)
-        return F.log_softmax(x, dim=1)
+        x = F.relu(self.fc2(x))
+        x = self.fc3(x)
+        return x
+    # def __init__(self):
+    #     super(Net, self).__init__()
+    #     self.conv1 = nn.Conv2d(1, 20, 5, 1)
+    #     self.conv2 = nn.Conv2d(20, 50, 5, 1)
+    #     self.fc1 = nn.Linear(4*4*50, 500)
+    #     self.fc2 = nn.Linear(500, 10)
+    
+    # def forward(self, x):
+    #     x = F.relu(self.conv1(x))
+    #     x = F.max_pool2d(x, 2, 2)
+    #     x = F.relu(self.conv2(x))
+    #     x = F.max_pool2d(x, 2, 2)
+    #     x = x.view(-1, 4*4*50)
+    #     x = F.relu(self.fc1(x))
+    #     x = self.fc2(x)
+    #     return F.log_softmax(x, dim=1)
 
 class TestingRemote(nn.Module):
     def __init__(self):
@@ -113,6 +127,7 @@ def loss_fn(target, pred):
     # or for example you can use
     return F.binary_cross_entropy(input=pred, target=target)
 
+
 def train_local(worker, model, opt, epochs, federated_train_loader, args):
     # In this case the location of the worker is directly in the data
     """Send the model to the worker and fit the model on the worker's training data.
@@ -143,10 +158,10 @@ def train_local(worker, model, opt, epochs, federated_train_loader, args):
 
                 # 2) Make a prediction
                 pred = model(data)
-
+                
                 # 3) Calculate how much we missed
-                loss = F.nll_loss(pred, target)
-
+                loss = ((pred - target)**2).sum() # try to change this function
+                
                 # 4) figure out which weights caused us to miss
                 loss.backward()
 
@@ -163,7 +178,52 @@ def train_local(worker, model, opt, epochs, federated_train_loader, args):
 
     return model, loss
 
-# TODO implements the asynchronous! Because it could require a lot of time
+
+def encrypted_training(args, model, private_train_loader, optimizer, epoch):
+    """Training of an encrypted model
+    Args:
+        args: value of the singleton class Arguments
+        model: Encrypted model Model which shall be trained
+        private_train_loader: loader of the encrypted data distributed by us among the network
+        optimizer: Optimization algorithm
+        epochs: Number of epochs
+        
+
+    Returns:
+        None
+    """
+    model.train()
+    
+    # 0) Compute the time of training for each epoch
+    start_time = time.time()
+
+    for batch_idx, (data, target) in enumerate(private_train_loader): # <-- now it is a private dataset
+        
+        # 1) Erase the previous gradients
+        optimizer.zero_grad()
+        
+        # 2) Make a prediction
+        output = model(data)
+        
+        # 3) Calculate how much we missed
+        batch_size = output.shape[0]
+        loss = ((output - target)**2).sum().refresh()/batch_size
+        
+        # 4) figure out which weights caused us to miss
+        loss.backward()
+        
+        # 5) change those weights
+        optimizer.step()
+
+        if batch_idx % args.log_interval == 0:
+            loss = loss.get().float_precision()
+            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}\tTime: {:.3f}s'.format(
+                epoch, batch_idx * args.batch_size, len(private_train_loader) * args.batch_size,
+                100. * batch_idx / len(private_train_loader), loss.item(), time.time() - start_time))
+        
+    
+
+
 async def train_remote(
     worker: websocket_client.WebsocketClientWorker,
     traced_model: torch.jit.ScriptModule,
@@ -254,3 +314,39 @@ def evaluate(model, test_loader, device):
     print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.5f}%)\n'.format(
         test_loss, correct, len(test_loader.dataset),
         100. * correct / len(test_loader.dataset)))
+
+
+# For model encryption --> only training
+def get_private_data_loaders(workers, precision_fractional, crypto_provider, args):
+    
+    def secret_share(tensor):
+        """
+        Transform to fixed precision and secret share a tensor
+        """
+        return (
+            tensor
+            .fix_precision(precision_fractional=precision_fractional)
+            .share(*workers, crypto_provider=crypto_provider, requires_grad=True)
+        )
+    
+    # transformation = transforms.Compose([
+    #     transforms.ToTensor(),
+    #     transforms.Normalize((0.1307,), (0.3081,))
+    # ])
+    
+    # train_loader = torch.utils.data.DataLoader(
+    #     datasets.MNIST('../data', train=True, download=True, transform=transformation),
+    #     batch_size=args.batch_size
+    # )
+    train_loader = torch.utils.data.DataLoader(NetworkTrafficDataset(args.test_path, transform=ToTensor()), shuffle=True)
+    n_train_items = 110
+    private_train_loader = [
+        (secret_share(data), secret_share(target))
+        for i, (data, target) in enumerate(train_loader)
+        if i < n_train_items / args.batch_size
+    ]
+   
+    # for i, (data, target) in enumerate(train_loader):
+    #     print(target.size())
+    
+    return private_train_loader
