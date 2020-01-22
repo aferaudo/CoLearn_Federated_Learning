@@ -1,6 +1,7 @@
+# TODO Specify in the thesis that this implementation doesn't have any kind of logic! The logic will be realized in future versions-
 # How to use example:
-# python remote_worker.py --host 192.168.1.183 -p 8778 -b localhost -t "topic/state" -w 1 -e "TRAINING" --verbose
-# THE HOST (--host) MUST BE SPECIFIED AS AN IP (also for localhost communication)
+# python remote_worker.py --host 127.0.0.1 -p 8778 -b localhost -t "topic/state" -w 1 -e "TRAINING" --verbose <-dt> <data available for training> <-di> <data available for inference>
+# THE HOST (--host) MUST BE SPECIFIED AS AN IP (also for localhost communication), instead no problem for the broker
 
 import argparse
 
@@ -11,8 +12,7 @@ import syft as sy
 from threading import Timer
 import numpy as np
 
-from torchvision import datasets, transforms # datasets is used only to do some tests
-
+from datasets import NetworkTrafficDataset, ToTensor, Normalize
 
 
 # Arguments
@@ -35,21 +35,17 @@ parser.add_argument(
     "--event", "-e", type=str, default="TRAINING", help="state of the client (TRAINING, INFERENCE, NOT_READY), e.g. --event TRAINING"
 )
 parser.add_argument(
+    "--training", "-dt", type=str, default=None, help="data training path. This will be mandatory in future versions"
+)
+parser.add_argument(
+    "--inference", "-di", type=str, default=None, help="data inference path. This will be mandatory in future versions"
+)
+parser.add_argument(
     "--verbose",
     "-v",
     action="store_true",
     help="if set, websocket server worker will be started in verbose mode",
 )
-
-def publish_event(broker, topic, event):
-    # Create a client object
-    client = mqtt.Client("woker")
-
-    # Connect to the broker
-    client.connect(broker)
-
-    # Publish the envet
-    client.publish(topic, event)
 
 
 # This script creates a worker and populate it with some toy data using worker.add_dataset, the dataset is identified by a key in this case xor.
@@ -75,18 +71,42 @@ def main(args):  # pragma: no cover
     # String to publish
 
     to_publish = '('+ args.host + ', ' + str(args.port) +', ' + args.event +')'
-    # Setup toy data (xor example)
-    data = th.tensor([[0.0, 1.0], [1.0, 0.0], [1.0, 1.0], [0.0, 0.0]], requires_grad=True)
-    target = th.tensor([[1.0], [1.0], [0.0], [0.0]], requires_grad=False)
     
-    x = th.tensor([[0.0, 1.0], [1.0, 0.0], [1.0, 1.0], [0.0, 0.0]],requires_grad=False).tag("inference")
 
+    if args.training == None:
+        # Setup toy data
+        data = th.tensor([[0.0, 1.0], [1.0, 0.0], [1.0, 1.0], [0.0, 0.0]], requires_grad=True)
+        target = th.tensor([[1.0], [1.0], [0.0], [0.0]], requires_grad=False)
+        # Create a dataset using the toy data
+        dataset = sy.BaseDataset(data, target)
+    else:
+        batch_size = 3 
+        print(args.training)
+        dataset = NetworkTrafficDataset(args.training, transform=ToTensor())
+
+    
+    # dataloader = th.utils.data.DataLoader(dataset, shuffle=True)
+    # for data, target in dataloader:
+    #     print("DATA: " + str(data))
+    #     print("TARGET: " + str(target))
+    
+    if args.inference == None:
+        # Setup toy data
+        y = th.tensor([[0.0, 1.0], [1.0, 0.0], [1.0, 1.0], [0.0, 0.0]],requires_grad=False).tag("inference")
+    else:
+        # TODO change with the real dataset
+        y = th.tensor([[0.0, 1.0], [1.0, 0.0], [1.0, 1.0], [0.0, 0.0]],requires_grad=False).tag("inference")
+
+    # training_dataset = th.tensor(dataset.data).tag("training")
+    # i = 0
+    # training_tensor = list()
+    
     # Create websocket worker
-    worker = WebsocketServerWorker(data=[x], **kwargs)
+    worker = WebsocketServerWorker(data=[y], **kwargs)
     
-    # Create a dataset using the toy data
-    dataset = sy.BaseDataset(data, target)
-
+    # for data in dataset.data:
+    #     training_tensor.append(th.tensor(data).float().tag("training"))
+    # worker.load_data(training_tensor)
     # Tell the worker about the dataset
     worker.add_dataset(dataset, key="training")
 
@@ -98,7 +118,7 @@ def main(args):  # pragma: no cover
     # Start worker
     worker.start()
 
-    return worker
+
 
 
 if __name__ == "__main__":
