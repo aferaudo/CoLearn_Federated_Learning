@@ -31,6 +31,7 @@
 # python federated_coordinator -t "topic/state" # local case
 # python federated_coordinator -t "topic/state" -r # remote case
 
+# BE CAREFUL: The program works only with the version 0.2.0a2, further version will be supported as soon as possible
 # TODO If you have some problem, reinstall the old version of syft syft-0.2.0a2 (current version: syft-0.2.1a1)
 import argparse
 
@@ -485,7 +486,6 @@ def starting_training_enc(lower_bound, upper_bound, path, args, server, hook):
     settings.event_served = 0
 
 
-
 async def training_remote(lower_bound, upper_bound, path, args, general_known_workers, round):
     # TODO Solve this problem: Returning the object as is.
     # warnings.warn('The input to trace is already a ScriptModule, tracing it is a no-op. Returning the object as is.')
@@ -509,6 +509,11 @@ async def training_remote(lower_bound, upper_bound, path, args, general_known_wo
             # TODO apply a selection criteria: This depends on the execution environment
             print("Applying selection criteria")
         
+
+        # Copy the devices to train (In this way all the other device training will start after that this training is ended)
+        to_train = {}
+        to_train = settings.training_devices.copy() #Otherwise, if a device is added to the list during the training, is possible that it will do the training for a lower number of round
+
         # Loading model
         # In the hierchical architecture we will ask the model for that category of device
         # In this case we have only one model
@@ -532,23 +537,24 @@ async def training_remote(lower_bound, upper_bound, path, args, general_known_wo
 
         print("Obtain the traced model...")
         traced_model = model.get_traced_model()
-        # print(traced_model.code)
         print("Done")
 
         learning_rate = args.lr
-        # Remember that the serializable model requires a starting point:
-        # for this reason we pass the mockdata: torch.zeros([1, 1, 28, 28]
-        # traced_model = torch.jit.trace(model, torch.zeros(1, 2))
+        # Remember that the serializable model requires a mock object
         traced_model = model.get_traced_model()
-        print("Remote training on multiple devices started...")
+        
+
         # Schedule calls for each worker concurrently:
         if round > 1:
             print("Round activated!")
             args.set_federated_batches(1000)
         
         print("Federated batches: " + str(args.federate_after_n_batches))
+
+        # Round start
         for i in range(round):
             print("\n\n#### ROUND {} #####".format(i))
+            print("Remote training on multiple devices started...")
             results = await asyncio.gather( 
                 *[
                     cf.train_remote(
@@ -560,12 +566,12 @@ async def training_remote(lower_bound, upper_bound, path, args, general_known_wo
                         epochs=args.epochs,
                         lr=learning_rate,
                     )
-                    for worker in settings.training_devices.items() # maybe now it doesn't require the index (worker[1])
+                    for worker in to_train.items() # maybe now it doesn't require the index (worker[1])
             ]
             )
             models = {}
             loss_values = {}
-            print("Remote training on multiple devices ended...")
+            print("Remote training on multiple devices ended")
 
             # Federate models (note that this will also change the model in models[0]
             for worker_id, worker_model, worker_loss in results:
@@ -579,10 +585,11 @@ async def training_remote(lower_bound, upper_bound, path, args, general_known_wo
             # Apply the federated averaging algorithm
             model = utils.federated_avg(models) # Maybe here I've to use the traced_model
             print(model) # Logging purposes
-        
+        # Round end
+
         # Logging purpose to verify if the parameters are changed
-        for param in model.parameters():
-                print(param.data)
+        # for param in model.parameters():
+        #         print(param.data)
 
         # Close all the sockets and delete the workers
         for worker_id, _, _ in results:
