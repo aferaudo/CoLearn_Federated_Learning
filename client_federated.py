@@ -329,15 +329,6 @@ def get_private_data_loaders(workers, precision_fractional, crypto_provider, arg
             .share(*workers, crypto_provider=crypto_provider, requires_grad=True)
         )
     
-    # transformation = transforms.Compose([
-    #     transforms.ToTensor(),
-    #     transforms.Normalize((0.1307,), (0.3081,))
-    # ])
-    
-    # train_loader = torch.utils.data.DataLoader(
-    #     datasets.MNIST('../data', train=True, download=True, transform=transformation),
-    #     batch_size=args.batch_size
-    # )
     train_loader = torch.utils.data.DataLoader(NetworkTrafficDataset(args.test_path, transform=ToTensor()), shuffle=True)
     n_train_items = 110
     private_train_loader = [
@@ -346,7 +337,5 @@ def get_private_data_loaders(workers, precision_fractional, crypto_provider, arg
         if i < n_train_items / args.batch_size
     ]
    
-    # for i, (data, target) in enumerate(train_loader):
-    #     print(target.size())
     
     return private_train_loader

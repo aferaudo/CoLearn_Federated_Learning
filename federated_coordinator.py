@@ -1,6 +1,5 @@
 #!/usr/bin/python
 
-# TODO Delete the print and add a logger
 # TODO websocket Server side has a problem when the connection is closed: It continous to wait from the same client, even if the connection has been closed. There is a way to stop the process?
 # TODO Check the torch.jit.trace
 # TODO Which is the behaviour when the connection is lost? It continues to wait? It is an error, we have to manage it
@@ -32,8 +31,9 @@
 # python federated_coordinator -t "topic/state" -r # remote case
 
 # BE CAREFUL: The program works only with the version 0.2.0a2, further version will be supported as soon as possible
-# TODO If you have some problem, reinstall the old version of syft syft-0.2.0a2 (current version: syft-0.2.1a1)
+# TODO If you have some problem, reinstall the old version of syft syft-0.2.0a2 (current version: syft-0.2.2a1)
 import argparse
+import logging
 
 import sys
 import torch
@@ -62,11 +62,6 @@ torch.manual_seed(1)
 
 device = torch.device("cuda" if use_cuda else "cpu")
 
-# @sy.func2plan(args_shape=[(1,1)])
-# def inference_with_anomaly_detection(x):
-#     print("nothing")
-#     if x == 1.0:
-#         print("Anomaly detected")
 
 class Arguments():
     def __init__(self):
@@ -143,10 +138,10 @@ class Coordinator(mqtt.Client):
 
 
     def on_connect(self, mqttc, obj, flags, rc):
-        print("Connected!")
+        logging.info("Connected!")
 
     def on_message(self, mqttc, obj, msg):
-        print(msg.topic+" "+str(msg.qos)+" "+str(msg.payload))
+        logging.info(msg.topic+" "+str(msg.qos)+" "+str(msg.payload))
         parser = EventParser(msg.payload)
         
         # Obtain ip address
@@ -156,36 +151,36 @@ class Coordinator(mqtt.Client):
         if not self.remote:
             # In case of local testing the event syntax is a bit different: e.g.
             # "(192.168.1.3,TRAINING)"
-            print("Local testing")
+            logging.info("Local testing")
 
             # Obtain the state of the server
             state = parser.state(local=True)
             if ip_address != -1 and state != None and state != "NOT_READY":
                 worker = sy.VirtualWorker(self.__hook, ip_address)
             elif state == "NOT_READY":
-                print("NOT_READY state received")
+                logging.info("NOT_READY state received")
             else:
-                print("Ip address or state not valid") 
+                logging.info("Ip address or state not valid") 
 
         else:
-            print("Remote execution")
+            logging.info("Remote execution")
             state = parser.state()
             port = parser.port()
             # Create remote Worker
             if port != -1 and ip_address != -1 and state != None and state != "NOT_READY":
                 identifier = ip_address + ":" + str(port)
-                print("Remote worker idetifier: " + identifier)
+                logging.info("Remote worker idetifier: " + identifier)
                 kwargs_websocket = {"host": ip_address, "hook": self.__hook, "verbose": True}
                 try:
                     worker = WebsocketClientWorker(id=identifier, port=port, **kwargs_websocket)
                 except:
                     e = sys.exc_info()[0]
-                    print("Error " + str(e))
+                    logging.info("Error " + str(e))
 
             elif state == "NOT_READY":
-                print("NOT_READY state received")
+                logging.info("NOT_READY state received")
             else:
-                print("Server worker: no worker gerated")
+                logging.info("Server worker: no worker gerated")
         
             
         if worker != None or state == "NOT_READY":
@@ -195,11 +190,11 @@ class Coordinator(mqtt.Client):
                 settings.training_devices[worker.id] = worker # registration
 
                 # [print(worker1[1]) for worker1 in self.server._known_workers.items() if worker1[0] != 'me']
-                print(worker)
+                logging.info(worker)
                 
                 if settings.event_served == 1: 
                     # Start the timer after received an event. This creates our window
-                    print("Timer starting")
+                    logging.info("Timer starting")
 
                     # We have two different method, one for the virtual worker and one for the remote
                     if self.remote:
@@ -248,13 +243,13 @@ class Coordinator(mqtt.Client):
                     if not os.path.exists(self.path): # If the model doesn't exist we create a new one
                         model = cf.TestingRemote()
                     else:
-                        print('Loading model')
+                        logging.info('Loading model')
                         model = cf.TestingRemote()
                         model.load_state_dict(torch.load(self.path))
             
                     # Obtain pointer to the data
                     data_pointer = worker.search("inference")# This return a list, we take only the first element
-                    print(data_pointer)
+                    logging.info(data_pointer)
                     if data_pointer != []:
                         data_pointer = data_pointer[0]
                         
@@ -271,20 +266,20 @@ class Coordinator(mqtt.Client):
                             # TODO Define a behaviour in case of anomaly detected!
                             output_pointer = model(data_pointer)
                             prediction_pointer = output_pointer.argmax(1, keepdim=True)
-                            print(prediction_pointer.get())
+                            logging.info(prediction_pointer.get())
 
                         del self.server._known_workers[worker.id]
 
                         # After the inference, close the ws with the server
                         worker.close()
                     else:
-                        print("Inference data not found!")
+                        logging.info("Inference data not found!")
                 else:
-                    print("Inference not implemented for local purpose")
+                    logging.info("Inference not implemented for local purpose")
         
             elif state == "NOT_READY":
                 # This method is useful in training case only
-                print(ip_address + " is not ready anymore, removing from the known lists")
+                logging.info(ip_address + " is not ready anymore, removing from the known lists")
                 if self.remote:
                     identifier = ip_address + ':' + str(port)
                 else:
@@ -293,43 +288,42 @@ class Coordinator(mqtt.Client):
                 if identifier in settings.training_devices.keys():
                     if self.remote:
                         worker = settings.training_devices.get(identifier)
-                        print("Worker to remove: ")
-                        print(worker)
+                        logging.info("Worker to remove: " + str(worker))
                         worker.close() # Close the connection in remote case
                     del settings.training_devices[identifier]
                     del self.server._known_workers[identifier]
 
             else:
-                print("No behavior defined for this event")
+                logging.info("No behavior defined for this event")
             
-            print("ONMESSAGE: Training devices: " + str(settings.training_devices))
-            print("ONMESSAGE: All known workers: " + str(self.server._known_workers))
+            logging.info("ONMESSAGE: Training devices: " + str(settings.training_devices))
+            logging.info("ONMESSAGE: All known workers: " + str(self.server._known_workers))
         else:
-            print("Some problems occurred")
+            logging.info("Some problems occurred")
 
     def on_publish(self, mqttc, obj, mid):
-        print("mid: "+str(mid))
+        logging.info("mid: "+str(mid))
 
     def run(self, host, port, topic):
         self.connect(host, port)
         self.subscribe(topic, 0)
 
-        print("Coordinator started. Press CTRL-C to stop")
+        logging.info("Coordinator started. Press CTRL-C to stop")
         try:
             self.loop_forever()
         except KeyboardInterrupt:
-            print("Coordinator stopped.")
+            logging.info("Coordinator stopped.")
             if self.local_thread != None:
-                print("Cancelling the timer..")
+                logging.info("Cancelling the timer..")
                 self.local_thread.cancel() # This works only if the timer objects is in a waiting phase, otherwise thr training will go ahead in any case
                 for key in self.server._known_workers.keys():
                     if key == "me":
                         pass
                     else:
                         worker = settings.training_devices[key]
-                        print("Closing socket for worker " + str(worker))
+                        logging.info("Closing socket for worker " + str(worker))
                         worker.close()
-                print("Done")
+                logging.info("Done")
     
    
 
@@ -339,52 +333,55 @@ def starting_training_local(lower_bound, upper_bound, path, args, server):
     if len(settings.training_devices) >= lower_bound:
             
         if len(settings.training_devices)>= upper_bound:
-            print("Applying selection criteria")
+            logging.info("Applying selection criteria")
 
         # Copy virtual workers to train 
         to_train = settings.training_devices.copy()
 
         # Loading of the model
         model = cf.FFNN()
-        print("Loading model procedure started...")
+        logging.info("Loading model procedure started...")
         if not os.path.exists(path): # If the model doesn't exist we create a new one
-            print("No existing model")               
+            logging.info("No existing model")               
             # model = model.float() 
         else:
-            print("Loading of the model..")
+            logging.info("Loading of the model..")
             model.load_state_dict(torch.load(path))
-            print("Model loading successfull")
-        print("Done")
+            logging.info("Model loading successfull")
+        logging.info("Done")
+
+        # For logging purpose: It will be commented in future version
         for param in model.parameters():
             print(param)
         
 
         # Distribution data among the virtual workers
-        print("Distribution data among the virtual workers")
+        logging.info("Distribution data among the virtual workers")
         federated_train_loader = sy.FederatedDataLoader( # <-- this is now a FederatedDataLoader 
                 NetworkTrafficDataset(args.test_path, ToTensor())
                 .federate(tuple(to_train.values())), # <-- NEW: we distribute the dataset across all the workers, it's now a FederatedDataset
                 batch_size=args.batch_size, shuffle=True)
-        print("Done")
+        logging.info("Done")
 
         # Optimizer creation
         optimizer = optim.SGD(model.parameters(), lr=args.lr)
         models = {}
 
         # Be aware: in this case the training is sequential (It is not important to have asynchronism in this case)
-        print("Start training")
+        logging.info("Start training")
         for worker in list(to_train.keys()):
             temp_model, loss = cf.train_local(worker=worker,
             model=model, opt=optimizer, epochs=1, federated_train_loader=federated_train_loader, args=args)
             models[worker] = temp_model
-        print("End training")
+        logging.info("End training")
 
-        print(models)
+        logging.info(models)
         
         # Apply the federated averaging algorithm
         model = utils.federated_avg(models)
-        print(model)
+        logging.info(model)
 
+        # For logging purpose: It will be commented in future version
         for param in model.parameters():
             print(param)
         
@@ -393,11 +390,11 @@ def starting_training_local(lower_bound, upper_bound, path, args, server):
 
         # Deleting workers from training list
         for worker in to_train.keys():
-            print("Removing: " + str(worker) + " from training devices")
+            logging.info("Removing: " + str(worker) + " from training devices")
             del settings.training_devices[worker]
             del server._known_workers[worker]
         
-        print("End training local")
+        logging.info("End training local")
     
     # Restarting window
     settings.event_served = 0
@@ -409,7 +406,7 @@ def starting_training_enc(lower_bound, upper_bound, path, args, server, hook):
     if len(settings.training_devices) >= lower_bound:
         
         if len(settings.training_devices) >= upper_bound:
-           print("Applying selection criteria")
+           logging.info("Applying selection criteria")
         
         # Copy virtual workers to train (MAX 2) (this is useful so then I can delete only the devices that have been trained)
         to_train = {}
@@ -423,46 +420,45 @@ def starting_training_enc(lower_bound, upper_bound, path, args, server, hook):
 
         # Loading of the model
         model = cf.FFNN()
-        print("Loading model procedure started...")
+        logging.info("Loading model procedure started...")
         if not os.path.exists(path): # If the model doesn't exist we create a new one
-            print("No existing model")               
+            logging.info("No existing model")               
             model = model.float() # I don't know if this is correct, but with this the method works
-            # for param in model.parameters():
-            #     print(param.data)
+            
         else:
-            print("Loading of the model..")
+            logging.info("Loading of the model..")
             model.load_state_dict(torch.load(path))
             # for param in model.parameters():
             #     print(param.data)
-            print("Model loading successfull")
+            logging.info("Model loading successfull")
 
-        print("Done")
+        logging.info("Done")
 
         # Creation new cryptoprovider
         crypto_provider = sy.VirtualWorker(hook, id="crypto_provider")
 
         # Data distribution
-        print("Distribute the data among the virtual workers...")
+        logging.info("Distribute the data among the virtual workers...")
         private_train_loader = cf.get_private_data_loaders(workers=to_train, precision_fractional=3, crypto_provider=crypto_provider, args=args)
-        print("Done")
+        logging.info("Done")
 
         # Distribution of the encrypted model among the workers (fixed_precision is needed, in order to perform consistently operations like the weight update)
-        print("Encryption and distribution of the model...")
+        logging.info("Encryption and distribution of the model...")
         model = model.fix_precision().share(*to_train, crypto_provider=crypto_provider, requires_grad=True)
         print(model)
-        print("Done")
+        logging.info("Done")
 
         # Optimizer creation and fix precision on it
-        print("Optimizer creation and fix precision on it...")
+        logging.info("Optimizer creation and fix precision on it...")
         optimizer = optim.SGD(model.parameters(), lr=args.lr)
         optimizer = optimizer.fix_precision()
-        print("Done")
+        logging.info("Done")
 
         # Start training
-        print("Start training")
+        logging.info("Start training")
         for i in range(args.epochs):
             cf.encrypted_training(model=model, optimizer=optimizer, epoch=i, private_train_loader=private_train_loader, args=args)
-        print("Done")
+        logging.info("Done")
         # Printing new model parameters
         model = model.get().float_precision()
         
@@ -474,13 +470,13 @@ def starting_training_enc(lower_bound, upper_bound, path, args, server, hook):
 
         # Deleting workers from training list
         for worker in to_train.keys():
-            print("Removing: " + str(worker) + " from training devices")
+            logging.info("Removing: " + str(worker) + " from training devices")
             del settings.training_devices[worker]
             del server._known_workers[worker]
-        print("End encryption")
+        logging.info("End encryption")
 
     else:
-        print("No behaviour defined for a number of workers less than " + str(lower_bound))
+        logging.info("No behaviour defined for a number of workers less than " + str(lower_bound))
 
     # Restarting window
     settings.event_served = 0
@@ -507,7 +503,7 @@ async def training_remote(lower_bound, upper_bound, path, args, general_known_wo
         
         if len(settings.training_devices) >= upper_bound:
             # TODO apply a selection criteria: This depends on the execution environment
-            print("Applying selection criteria")
+            logging.info("Applying selection criteria")
         
 
         # Copy the devices to train (In this way all the other device training will start after that this training is ended)
@@ -518,26 +514,27 @@ async def training_remote(lower_bound, upper_bound, path, args, general_known_wo
         # In the hierchical architecture we will ask the model for that category of device
         # In this case we have only one model
         model = cf.FFNN()
-        print("Loading model procedure started")
+        logging.info("Loading model procedure started")
         if not os.path.exists(path): # If the model doesn't exist we create a new one
-            print("No existing model")               
-            # model = cf.FFNN() # This is a first example we can implement another selection criteria for the model 
+            logging.info("No existing model")               
             model = model.float() # I don't know if this is correct, but with this the method works
+
             for param in model.parameters():
                 print(param.data)
         else:
-            print("Loading of the model..")
+            logging.info("Found a model..")
         
             model.load_state_dict(torch.load(path))
+
             for param in model.parameters():
                 print(param.data)
-            print("Model loading successfull")
-        print("Done")
+            
+        logging.info("Done")
         
 
-        print("Obtain the traced model...")
+        logging.info("Obtain the traced model...")
         traced_model = model.get_traced_model()
-        print("Done")
+        logging.info("Done")
 
         learning_rate = args.lr
         # Remember that the serializable model requires a mock object
@@ -546,15 +543,15 @@ async def training_remote(lower_bound, upper_bound, path, args, general_known_wo
 
         # Schedule calls for each worker concurrently:
         if round > 1:
-            print("Round activated!")
+            logging.info("Round activated!")
             args.set_federated_batches(1000)
         
-        print("Federated batches: " + str(args.federate_after_n_batches))
+        logging.info("Federated batches: " + str(args.federate_after_n_batches))
 
         # Round start
         for i in range(round):
-            print("\n\n#### ROUND {} #####".format(i))
-            print("Remote training on multiple devices started...")
+            logging.info("\n\n#### ROUND {} #####".format(i))
+            logging.info("Remote training on multiple devices started...")
             results = await asyncio.gather( 
                 *[
                     cf.train_remote(
@@ -571,13 +568,13 @@ async def training_remote(lower_bound, upper_bound, path, args, general_known_wo
             )
             models = {}
             loss_values = {}
-            print("Remote training on multiple devices ended")
+            logging.info("Remote training on multiple devices ended")
 
             # Federate models (note that this will also change the model in models[0]
             for worker_id, worker_model, worker_loss in results:
                 if worker_model is not None:
                     models[worker_id] = worker_model
-                    print("Loss for worker id: " + str(worker_id) + " " + str(worker_loss))
+                    logging.info("Loss for worker id: " + str(worker_id) + " " + str(worker_loss))
                 
             print(models) # Logging purposes
             
@@ -593,14 +590,14 @@ async def training_remote(lower_bound, upper_bound, path, args, general_known_wo
 
         # Close all the sockets and delete the workers
         for worker_id, _, _ in results:
-            print("Closing socket for " + str(worker_id))
+            logging.info("Closing socket for " + str(worker_id))
             worker = settings.training_devices[worker_id]
             worker.close()
 
-            print("Deleting " + str(worker_id) + " from known worker")
+            logging.info("Deleting " + str(worker_id) + " from known worker")
             del settings.training_devices[worker.id]
             del general_known_workers[worker_id]
-        print("Done!")
+        logging.info("Done")
         
 
         # After the training we save the model 
@@ -613,7 +610,7 @@ async def training_remote(lower_bound, upper_bound, path, args, general_known_wo
         
     else:
         # TODO define a possible behavior
-        print("No behaviour defined for the number of devices achieved")
+        logging.info("No behaviour defined for the number of devices achieved")
     
     # Window restart
     settings.event_served = 0
@@ -622,6 +619,11 @@ async def training_remote(lower_bound, upper_bound, path, args, general_known_wo
 def main(argv):
     # Model to test instance cration
     # model = cf.GRUModel(input_dim=10, hidden_dim=10, output_dim=1, n_layers=1)
+    format = "%(asctime)s: %(message)s"
+
+    logging.basicConfig(format=format, level=logging.INFO,
+                        datefmt="%H:%M:%S")
+    logging.info(os.getpid())
     mqttc = Coordinator(args.window, args.remote, args.federated_round, args.encryption)
     mqttc.run(args.host, args.port, args.topic)
     # model = cf.FFNN()
