@@ -1,9 +1,8 @@
-#!/usr/bin/python
-
 # TODO websocket Server side has a problem when the connection is closed: It continous to wait from the same client, even if the connection has been closed. There is a way to stop the process?
 # TODO Check the torch.jit.trace
 # TODO Which is the behaviour when the connection is lost? It continues to wait? It is an error, we have to manage it
 # TODO Complete closing when ctrl-c is called: It is just missing the closing of the window thread
+# TODO Do the federated after n_batches in a more clever way
 
 # Be aware of these cases:
 # 1) What happen if a new device desires to do the training after the window? --> solution of the todo
@@ -34,6 +33,7 @@
 # TODO If you have some problem, reinstall the old version of syft syft-0.2.0a2 (current version: syft-0.2.2a1)
 import argparse
 import logging
+import psutil
 
 import sys
 import torch
@@ -69,14 +69,14 @@ class Arguments():
         self.test_batch_size = 1024
         self.epochs = 1 # Remember to change the number of epochs
         # federated_after_n_batches: number of training steps performed on each remote worker before averaging
-        self.federate_after_n_batches = 1000 # In this way it will not be stopped during the training
-        self.lr = 0.0001
+        self.federate_after_n_batches = -1 # In this way it will not be stopped during the training
+        self.lr = 0.01
         self.momentum = 0.5
         self.no_cuda = False
         self.seed = 1
         self.log_interval = 30
         self.save_model = False
-        self.test_path = "/Users/angeloferaudo/Downloads/UNSW_2018_IoT_Botnet_Final_10_best_Training_1_1.csv" # Insert the path for the testing evaluation
+        self.test_path = "/Users/angeloferaudo/Downloads/UNSW_2018_IoT_Botnet_Final_10_best_Training_0.csv" # Insert the path for the testing evaluation
     
     def set_federated_batches(self, batches):
         self.federate_after_n_batches = batches
@@ -155,6 +155,8 @@ class Coordinator(mqtt.Client):
 
             # Obtain the state of the server
             state = parser.state(local=True)
+            
+            # Create Local worker
             if ip_address != -1 and state != None and state != "NOT_READY":
                 worker = sy.VirtualWorker(self.__hook, ip_address)
             elif state == "NOT_READY":
@@ -166,6 +168,7 @@ class Coordinator(mqtt.Client):
             logging.info("Remote execution")
             state = parser.state()
             port = parser.port()
+            
             # Create remote Worker
             if port != -1 and ip_address != -1 and state != None and state != "NOT_READY":
                 identifier = ip_address + ":" + str(port)
@@ -361,20 +364,47 @@ def starting_training_local(lower_bound, upper_bound, path, args, server):
                 NetworkTrafficDataset(args.test_path, ToTensor())
                 .federate(tuple(to_train.values())), # <-- NEW: we distribute the dataset across all the workers, it's now a FederatedDataset
                 batch_size=args.batch_size, shuffle=True)
+        
+        # This code was introduced for testing purpose
+        # data_loader_testing = {}
+        # n_train_items = 1000
+        # for worker in to_train.items():
+        #     data_loader_testing[worker[0]] = list()
+        #     train_loader = torch.utils.data.DataLoader(NetworkTrafficDataset(args.test_path, transform=ToTensor()), shuffle=True)
+        #     for i, (data, target) in enumerate(train_loader):
+        #         if i < n_train_items:
+        #             data_loader_testing[worker[0]].append((data.send(worker[1]), target.send(worker[1])))
+        #         else:
+        #             break
+
         logging.info("Done")
 
         # Optimizer creation
         optimizer = optim.SGD(model.parameters(), lr=args.lr)
         models = {}
 
+        
+        # f = open("../test results/test_local.txt", "a+") # testing
+        # f.write("total_items: " + str(n_train_items)) # testing
+        # f.write("\ntotal_epochs: " + str(args.epochs)) # testing
+        # start_time = time.time() # testing
+        # counter = 0 # testing
+        
         # Be aware: in this case the training is sequential (It is not important to have asynchronism in this case)
         logging.info("Start training")
         for worker in list(to_train.keys()):
+            logging.info("Training for worker: " + str(worker))
             temp_model, loss = cf.train_local(worker=worker,
             model=model, opt=optimizer, epochs=1, federated_train_loader=federated_train_loader, args=args)
             models[worker] = temp_model
+       
         logging.info("End training")
 
+        # end_time = time.time() # testing
+        # f.write("\n"+str(psutil.getloadavg())) # testing
+        # f.write("\ntotal_time: " + str((end_time - start_time))) # testing
+        # f.close() # testing
+        
         logging.info(models)
         
         # Apply the federated averaging algorithm
@@ -382,8 +412,8 @@ def starting_training_local(lower_bound, upper_bound, path, args, server):
         logging.info(model)
 
         # For logging purpose: It will be commented in future version
-        for param in model.parameters():
-            print(param)
+        # for param in model.parameters():
+        #     print(param)
         
         # save model
         # torch.save(model.state_dict(), self.path)
@@ -439,7 +469,8 @@ def starting_training_enc(lower_bound, upper_bound, path, args, server, hook):
 
         # Data distribution
         logging.info("Distribute the data among the virtual workers...")
-        private_train_loader = cf.get_private_data_loaders(workers=to_train, precision_fractional=3, crypto_provider=crypto_provider, args=args)
+        n_train_items = 1000
+        private_train_loader = cf.get_private_data_loaders(workers=to_train, precision_fractional=3, crypto_provider=crypto_provider, args=args, n_train_items=n_train_items)
         logging.info("Done")
 
         # Distribution of the encrypted model among the workers (fixed_precision is needed, in order to perform consistently operations like the weight update)
@@ -454,11 +485,26 @@ def starting_training_enc(lower_bound, upper_bound, path, args, server, hook):
         optimizer = optimizer.fix_precision()
         logging.info("Done")
 
+        
+        # f = open("../test results/test_encrypted.txt", "a+") # testing
+        
+        # Testing code
+        # f.write("total_items: " + str(n_train_items)) # testing
+        # f.write("\ntotal_epochs: " + str(args.epochs))
+        # start_time = time.time() # testing
+        
         # Start training
         logging.info("Start training")
         for i in range(args.epochs):
             cf.encrypted_training(model=model, optimizer=optimizer, epoch=i, private_train_loader=private_train_loader, args=args)
         logging.info("Done")
+        
+        # end_time = time.time() # testing
+
+        # f.write("\n"+str(psutil.getloadavg())) # testing
+        # f.write("\ntotal_time: " + str((end_time - start_time))) # testing
+        # f.close() # testing
+
         # Printing new model parameters
         model = model.get().float_precision()
         
@@ -483,10 +529,6 @@ def starting_training_enc(lower_bound, upper_bound, path, args, server, hook):
 
 
 async def training_remote(lower_bound, upper_bound, path, args, general_known_workers, round):
-    # TODO Solve this problem: Returning the object as is.
-    # warnings.warn('The input to trace is already a ScriptModule, tracing it is a no-op. Returning the object as is.')
-    # I think that is due to the fact that the model is still serialized, so to solve this copy the weight in another
-    # model or save them someqhere and then reload them!
     """Set all the parameters and start the remote training
     Args:
         lower_bound: minum number of devices required for training
@@ -499,121 +541,122 @@ async def training_remote(lower_bound, upper_bound, path, args, general_known_wo
     Returns:
         no return
     """
-    if len(settings.training_devices) >= lower_bound:
-        
-        if len(settings.training_devices) >= upper_bound:
-            # TODO apply a selection criteria: This depends on the execution environment
-            logging.info("Applying selection criteria")
-        
-
-        # Copy the devices to train (In this way all the other device training will start after that this training is ended)
-        to_train = {}
-        to_train = settings.training_devices.copy() #Otherwise, if a device is added to the list during the training, is possible that it will do the training for a lower number of round
-
-        # Loading model
-        # In the hierchical architecture we will ask the model for that category of device
-        # In this case we have only one model
-        model = cf.FFNN()
-        logging.info("Loading model procedure started")
-        if not os.path.exists(path): # If the model doesn't exist we create a new one
-            logging.info("No existing model")               
-            model = model.float() # I don't know if this is correct, but with this the method works
-
-            for param in model.parameters():
-                print(param.data)
-        else:
-            logging.info("Found a model..")
-        
-            model.load_state_dict(torch.load(path))
-
-            for param in model.parameters():
-                print(param.data)
+    try:
+        if len(settings.training_devices) >= lower_bound:
             
-        logging.info("Done")
-        
+            if len(settings.training_devices) >= upper_bound:
+                # TODO apply a selection criteria: This depends on the execution environment
+                logging.info("Applying selection criteria")
+            
 
-        logging.info("Obtain the traced model...")
-        traced_model = model.get_traced_model()
-        logging.info("Done")
+            # Copy the devices to train (In this way all the other device training will start after that this training is ended)
+            to_train = {}
+            to_train = settings.training_devices.copy() #Otherwise, if a device is added to the list during the training, is possible that it will do the training for a lower number of round
 
-        learning_rate = args.lr
-        # Remember that the serializable model requires a mock object
-        traced_model = model.get_traced_model()
-        
+            # Loading model
+            # In the hierchical architecture we will ask the model for that category of device
+            # In this case we have only one model
+            model = cf.FFNN()
+            logging.info("Loading model procedure started")
+            if not os.path.exists(path): # If the model doesn't exist we create a new one
+                logging.info("No existing model")               
+                model = model.float() # I don't know if this is correct, but with this the method works
 
-        # Schedule calls for each worker concurrently:
-        if round > 1:
-            logging.info("Round activated!")
-            args.set_federated_batches(1000)
-        
-        logging.info("Federated batches: " + str(args.federate_after_n_batches))
+                for param in model.parameters():
+                    print(param.data)
+            else:
+                logging.info("Found a model..")
+            
+                model.load_state_dict(torch.load(path))
 
-        # Round start
-        for i in range(round):
-            logging.info("\n\n#### ROUND {} #####".format(i))
-            logging.info("Remote training on multiple devices started...")
-            results = await asyncio.gather( 
-                *[
-                    cf.train_remote(
-                        worker=worker[1],
-                        traced_model=traced_model,
-                        batch_size=args.batch_size,
-                        optimizer="SGD",
-                        max_nr_batches=args.federate_after_n_batches,
-                        epochs=args.epochs,
-                        lr=learning_rate,
-                    )
-                    for worker in to_train.items() # maybe now it doesn't require the index (worker[1])
-            ]
-            )
-            models = {}
-            loss_values = {}
-            logging.info("Remote training on multiple devices ended")
-
-            # Federate models (note that this will also change the model in models[0]
-            for worker_id, worker_model, worker_loss in results:
-                if worker_model is not None:
-                    models[worker_id] = worker_model
-                    logging.info("Loss for worker id: " + str(worker_id) + " " + str(worker_loss))
+                for param in model.parameters():
+                    print(param.data)
                 
-            print(models) # Logging purposes
+            logging.info("Done")
             
 
-            # Apply the federated averaging algorithm
-            model = utils.federated_avg(models) # Maybe here I've to use the traced_model
-            print(model) # Logging purposes
-        # Round end
+            logging.info("Obtain the traced model...")
+            traced_model = model.get_traced_model()
+            logging.info("Done")
 
-        # Logging purpose to verify if the parameters are changed
-        # for param in model.parameters():
-        #         print(param.data)
+            learning_rate = args.lr
+            # Remember that the serializable model requires a mock object
+            traced_model = model.get_traced_model()
+            
 
-        # Close all the sockets and delete the workers
-        for worker_id, _, _ in results:
-            logging.info("Closing socket for " + str(worker_id))
-            worker = settings.training_devices[worker_id]
-            worker.close()
+            # Schedule calls for each worker concurrently:
+            if round > 1:
+                logging.info("Round activated!")
+                args.set_federated_batches(10000)
+            
+            logging.info("Federated batches: " + str(args.federate_after_n_batches))
 
-            logging.info("Deleting " + str(worker_id) + " from known worker")
-            del settings.training_devices[worker.id]
-            del general_known_workers[worker_id]
-        logging.info("Done")
-        
+            # Round start
+            for i in range(round):
+                logging.info("\n\n#### ROUND {} #####".format(i))
+                logging.info("Remote training on multiple devices started...")
+                results = await asyncio.gather( 
+                    *[
+                        cf.train_remote(
+                            worker=worker[1],
+                            traced_model=traced_model,
+                            batch_size=args.batch_size,
+                            optimizer="SGD",
+                            max_nr_batches=args.federate_after_n_batches,
+                            epochs=args.epochs,
+                            lr=learning_rate,
+                        )
+                        for worker in to_train.items() # maybe now it doesn't require the index (worker[1])
+                ]
+                )
+                models = {}
+                loss_values = {}
+                logging.info("Remote training on multiple devices ended")
 
-        # After the training we save the model 
-        torch.save(model.state_dict(), path)
+                # Federate models (note that this will also change the model in models[0]
+                for worker_id, worker_model, worker_loss in results:
+                    if worker_model is not None:
+                        models[worker_id] = worker_model
+                        logging.info("Loss for worker id: " + str(worker_id) + " " + str(worker_loss))
+                    
+                print(models) # Logging purposes
+                
 
-        # Evaluation of the model
-        # test_dataset = NetworkTrafficDataset(args.test_path, transform=ToTensor())
-        # test_loader = torch.utils.data.DataLoader(test_dataset, shuffle=True)
-        # cf.evaluate(model,test_loader,device)
-        
-    else:
-        # TODO define a possible behavior
-        logging.info("No behaviour defined for the number of devices achieved")
-    
-    # Window restart
-    settings.event_served = 0
+                # Apply the federated averaging algorithm
+                model = utils.federated_avg(models) # Maybe here I've to use the traced_model
+                print(model) # Logging purposes
+            # Round end
+
+            # Logging purpose to verify if the parameters are changed
+            # for param in model.parameters():
+            #         print(param.data)
+
+            # Close all the sockets and delete the workers
+            for worker_id, _, _ in results:
+                logging.info("Closing socket for " + str(worker_id))
+                worker = settings.training_devices[worker_id]
+                worker.close()
+
+                logging.info("Deleting " + str(worker_id) + " from known worker")
+                del settings.training_devices[worker.id]
+                del general_known_workers[worker_id]
+            logging.info("Done")
+            
+
+            # After the training we save the model 
+            torch.save(model.state_dict(), path)
+
+            # Evaluation of the model
+            # test_dataset = NetworkTrafficDataset(args.test_path, transform=ToTensor())
+            # test_loader = torch.utils.data.DataLoader(test_dataset, shuffle=True)
+            # cf.evaluate(model,test_loader,device)
+            
+        else:
+            # TODO define a possible behavior
+            logging.info("No behaviour defined for the number of devices achieved")
+    finally:
+        # Window restart
+        settings.event_served = 0
 
 
 def main(argv):

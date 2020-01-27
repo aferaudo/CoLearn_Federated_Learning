@@ -147,9 +147,7 @@ def train_local(worker, model, opt, epochs, federated_train_loader, args):
     model.train()
     result_models = {}
     for epoch in range(epochs):
-        print("Training for worker: " + worker)
         for batch_idx, (data, target) in enumerate(federated_train_loader): # now it is a distributed dataset
-            #print(data.location.id)
             if data.location.id == worker:
                 model.send(data.location)
 
@@ -175,7 +173,6 @@ def train_local(worker, model, opt, epochs, federated_train_loader, args):
                         epoch, batch_idx * args.batch_size, len(federated_train_loader) * args.batch_size,
                         100. * batch_idx / len(federated_train_loader), loss.item()))
     
-
     return model, loss
 
 
@@ -317,7 +314,7 @@ def evaluate(model, test_loader, device):
 
 
 # For model encryption --> only training
-def get_private_data_loaders(workers, precision_fractional, crypto_provider, args):
+def get_private_data_loaders(workers, args, n_train_items, precision_fractional=3, crypto_provider=None):
     
     def secret_share(tensor):
         """
@@ -330,12 +327,12 @@ def get_private_data_loaders(workers, precision_fractional, crypto_provider, arg
         )
     
     train_loader = torch.utils.data.DataLoader(NetworkTrafficDataset(args.test_path, transform=ToTensor()), shuffle=True)
-    n_train_items = 110
-    private_train_loader = [
+    
+    result_train_loader = [
         (secret_share(data), secret_share(target))
         for i, (data, target) in enumerate(train_loader)
         if i < n_train_items / args.batch_size
     ]
-   
     
-    return private_train_loader
+    return result_train_loader
+
