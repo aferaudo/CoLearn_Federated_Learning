@@ -11,6 +11,8 @@ import paho.mqtt.client as mqtt
 import syft as sy
 from threading import Timer
 import numpy as np
+import logging
+import os
 
 from datasets import NetworkTrafficDataset, ToTensor, Normalize
 
@@ -52,6 +54,12 @@ parser.add_argument(
 def main(args):  # pragma: no cover
     hook = sy.TorchHook(th)
     identifier = args.host + ":" + str(args.port)
+    format = "%(asctime)s: %(message)s"
+
+    logging.basicConfig(format=format, level=logging.INFO,
+                        datefmt="%H:%M:%S")
+    logging.info(os.getpid())
+
     kwargs = {
         "id": identifier,
         "host": args.host,

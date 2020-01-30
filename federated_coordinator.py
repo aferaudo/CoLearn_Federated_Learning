@@ -367,7 +367,7 @@ def starting_training_local(lower_bound, upper_bound, path, args, server):
         
         # This code was introduced for testing purpose
         # data_loader_testing = {}
-        # n_train_items = 1000
+        n_train_items = 1000
         # for worker in to_train.items():
         #     data_loader_testing[worker[0]] = list()
         #     train_loader = torch.utils.data.DataLoader(NetworkTrafficDataset(args.test_path, transform=ToTensor()), shuffle=True)
@@ -384,11 +384,11 @@ def starting_training_local(lower_bound, upper_bound, path, args, server):
         models = {}
 
         
-        # f = open("../test results/test_local.txt", "a+") # testing
-        # f.write("total_items: " + str(n_train_items)) # testing
-        # f.write("\ntotal_epochs: " + str(args.epochs)) # testing
-        # start_time = time.time() # testing
-        # counter = 0 # testing
+        f = open("../test results/test_local.txt", "a+") # testing
+        f.write("total_items: " + str(n_train_items)) # testing
+        f.write("\ntotal_epochs: " + str(args.epochs)) # testing
+        start_time = time.time() # testing
+         counter = 0 # testing
         
         # Be aware: in this case the training is sequential (It is not important to have asynchronism in this case)
         logging.info("Start training")
@@ -400,10 +400,10 @@ def starting_training_local(lower_bound, upper_bound, path, args, server):
        
         logging.info("End training")
 
-        # end_time = time.time() # testing
-        # f.write("\n"+str(psutil.getloadavg())) # testing
-        # f.write("\ntotal_time: " + str((end_time - start_time))) # testing
-        # f.close() # testing
+        end_time = time.time() # testing
+        f.write("\n"+str(psutil.getloadavg())) # testing
+        f.write("\ntotal_time: " + str((end_time - start_time))) # testing
+        f.close() # testing
         
         logging.info(models)
         
@@ -489,9 +489,9 @@ def starting_training_enc(lower_bound, upper_bound, path, args, server, hook):
         # f = open("../test results/test_encrypted.txt", "a+") # testing
         
         # Testing code
-        # f.write("total_items: " + str(n_train_items)) # testing
-        # f.write("\ntotal_epochs: " + str(args.epochs))
-        # start_time = time.time() # testing
+        f.write("total_items: " + str(n_train_items)) # testing
+        f.write("\ntotal_epochs: " + str(args.epochs))
+        start_time = time.time() # testing
         
         # Start training
         logging.info("Start training")
@@ -499,11 +499,11 @@ def starting_training_enc(lower_bound, upper_bound, path, args, server, hook):
             cf.encrypted_training(model=model, optimizer=optimizer, epoch=i, private_train_loader=private_train_loader, args=args)
         logging.info("Done")
         
-        # end_time = time.time() # testing
+        end_time = time.time() # testing
 
-        # f.write("\n"+str(psutil.getloadavg())) # testing
-        # f.write("\ntotal_time: " + str((end_time - start_time))) # testing
-        # f.close() # testing
+        f.write("\n"+str(psutil.getloadavg())) # testing
+        f.write("\ntotal_time: " + str((end_time - start_time))) # testing
+        f.close() # testing
 
         # Printing new model parameters
         model = model.get().float_precision()
@@ -587,12 +587,17 @@ async def training_remote(lower_bound, upper_bound, path, args, general_known_wo
             # Schedule calls for each worker concurrently:
             if round > 1:
                 logging.info("Round activated!")
-                args.set_federated_batches(10000)
+                args.set_federated_batches(3000)
             
             logging.info("Federated batches: " + str(args.federate_after_n_batches))
 
-            # Round start
+            # Testing code
+            f = open("round_testing.txt", "a+")
+            start_time = time.time() #testing
+            f.write("Testing round on: " + str(args.federate_after_n_batches) + "\n")
+            # Round start  
             for i in range(round):
+                start_time_each_round = time.time() # testing
                 logging.info("\n\n#### ROUND {} #####".format(i))
                 logging.info("Remote training on multiple devices started...")
                 results = await asyncio.gather( 
@@ -618,13 +623,19 @@ async def training_remote(lower_bound, upper_bound, path, args, general_known_wo
                     if worker_model is not None:
                         models[worker_id] = worker_model
                         logging.info("Loss for worker id: " + str(worker_id) + " " + str(worker_loss))
+                        f.write("Loss for worker id: " + str(worker_id) + " " + str(worker_loss) + "\n")
                     
                 print(models) # Logging purposes
                 
 
                 # Apply the federated averaging algorithm
-                model = utils.federated_avg(models) # Maybe here I've to use the traced_model
-                print(model) # Logging purposes
+                traced_model = utils.federated_avg(models) # Maybe here I've to use the traced_model
+                print(traced_model) # Logging purposes
+
+                end_time_each_round = time.time() # testing
+                f.write("Time round " + str(i) + " : " + str(end_time_each_round - start_time_each_round) + "\n") # testing
+            end_time = time.time() # testing
+            f.write("Total training time: " + str(end_time - start_time) + "\n") # testing
             # Round end
 
             # Logging purpose to verify if the parameters are changed
@@ -644,13 +655,14 @@ async def training_remote(lower_bound, upper_bound, path, args, general_known_wo
             
 
             # After the training we save the model 
-            torch.save(model.state_dict(), path)
+            # torch.save(traced_model.state_dict(), path)
 
             # Evaluation of the model
-            # test_dataset = NetworkTrafficDataset(args.test_path, transform=ToTensor())
-            # test_loader = torch.utils.data.DataLoader(test_dataset, shuffle=True)
-            # cf.evaluate(model,test_loader,device)
-            
+            test_dataset = NetworkTrafficDataset(args.test_path, transform=ToTensor())
+            test_loader = torch.utils.data.DataLoader(test_dataset, shuffle=True)
+            total_loss = cf.evaluate(traced_model,test_loader,device)
+            f.write("Loss evaluation global model after training: " + str(total_loss) + "\n") # testing
+            f.close()
         else:
             # TODO define a possible behavior
             logging.info("No behaviour defined for the number of devices achieved")
@@ -669,13 +681,6 @@ def main(argv):
     logging.info(os.getpid())
     mqttc = Coordinator(args.window, args.remote, args.federated_round, args.encryption)
     mqttc.run(args.host, args.port, args.topic)
-    # model = cf.FFNN()
-    # model.load_state_dict(torch.load('./test.pth'))
-    # for param in model.parameters():
-    #     print(param.data)
-    # test_dataset = NetworkTrafficDataset("/Users/angeloferaudo/Downloads/UNSW_2018_IoT_Botnet_Final_10_best_Training_3.csv", transform=ToTensor())
-    # test_loader = torch.utils.data.DataLoader(test_dataset, shuffle=True)
-    # cf.evaluate(model,test_loader,device)
 
 if __name__ == "__main__":
 

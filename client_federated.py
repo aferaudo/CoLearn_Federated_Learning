@@ -311,7 +311,7 @@ def evaluate(model, test_loader, device):
     print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.5f}%)\n'.format(
         test_loss, correct, len(test_loader.dataset),
         100. * correct / len(test_loader.dataset)))
-
+    return test_loss
 
 # For model encryption --> only training
 def get_private_data_loaders(workers, args, n_train_items, precision_fractional=3, crypto_provider=None):
