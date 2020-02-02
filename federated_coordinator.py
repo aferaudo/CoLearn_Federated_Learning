@@ -365,30 +365,12 @@ def starting_training_local(lower_bound, upper_bound, path, args, server):
                 .federate(tuple(to_train.values())), # <-- NEW: we distribute the dataset across all the workers, it's now a FederatedDataset
                 batch_size=args.batch_size, shuffle=True)
         
-        # This code was introduced for testing purpose
-        # data_loader_testing = {}
-        # n_train_items = 1000
-        # for worker in to_train.items():
-        #     data_loader_testing[worker[0]] = list()
-        #     train_loader = torch.utils.data.DataLoader(NetworkTrafficDataset(args.test_path, transform=ToTensor()), shuffle=True)
-        #     for i, (data, target) in enumerate(train_loader):
-        #         if i < n_train_items:
-        #             data_loader_testing[worker[0]].append((data.send(worker[1]), target.send(worker[1])))
-        #         else:
-        #             break
-
         logging.info("Done")
 
         # Optimizer creation
         optimizer = optim.SGD(model.parameters(), lr=args.lr)
         models = {}
 
-        
-        # f = open("../test results/test_local.txt", "a+") # testing
-        # f.write("total_items: " + str(n_train_items)) # testing
-        # f.write("\ntotal_epochs: " + str(args.epochs)) # testing
-        # start_time = time.time() # testing
-        # counter = 0 # testing
         
         # Be aware: in this case the training is sequential (It is not important to have asynchronism in this case)
         logging.info("Start training")
@@ -400,10 +382,6 @@ def starting_training_local(lower_bound, upper_bound, path, args, server):
        
         logging.info("End training")
 
-        # end_time = time.time() # testing
-        # f.write("\n"+str(psutil.getloadavg())) # testing
-        # f.write("\ntotal_time: " + str((end_time - start_time))) # testing
-        # f.close() # testing
         
         logging.info(models)
         
@@ -484,14 +462,6 @@ def starting_training_enc(lower_bound, upper_bound, path, args, server, hook):
         optimizer = optim.SGD(model.parameters(), lr=args.lr)
         optimizer = optimizer.fix_precision()
         logging.info("Done")
-
-        
-        # f = open("../test results/test_encrypted.txt", "a+") # testing
-        
-        # Testing code
-        # f.write("total_items: " + str(n_train_items)) # testing
-        # f.write("\ntotal_epochs: " + str(args.epochs))
-        # start_time = time.time() # testing
         
         # Start training
         logging.info("Start training")
@@ -499,12 +469,6 @@ def starting_training_enc(lower_bound, upper_bound, path, args, server, hook):
             cf.encrypted_training(model=model, optimizer=optimizer, epoch=i, private_train_loader=private_train_loader, args=args)
         logging.info("Done")
         
-        # end_time = time.time() # testing
-
-        # f.write("\n"+str(psutil.getloadavg())) # testing
-        # f.write("\ntotal_time: " + str((end_time - start_time))) # testing
-        # f.close() # testing
-
         # Printing new model parameters
         model = model.get().float_precision()
         
@@ -623,7 +587,7 @@ async def training_remote(lower_bound, upper_bound, path, args, general_known_wo
                 
 
                 # Apply the federated averaging algorithm
-                model = utils.federated_avg(models) # Maybe here I've to use the traced_model
+                traced_model = utils.federated_avg(models) # Maybe here I've to use the traced_model
                 print(model) # Logging purposes
             # Round end
 
@@ -644,12 +608,12 @@ async def training_remote(lower_bound, upper_bound, path, args, general_known_wo
             
 
             # After the training we save the model 
-            torch.save(model.state_dict(), path)
+            torch.save(traced_model.state_dict(), path)
 
             # Evaluation of the model
             # test_dataset = NetworkTrafficDataset(args.test_path, transform=ToTensor())
             # test_loader = torch.utils.data.DataLoader(test_dataset, shuffle=True)
-            # cf.evaluate(model,test_loader,device)
+            # cf.evaluate(traced_model,test_loader,device)
             
         else:
             # TODO define a possible behavior

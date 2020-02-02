@@ -1,0 +1,42 @@
+Testing round on: 3000
+Loss for worker id: 192.168.1.163:8777 tensor(0.0045, requires_grad=True)
+Loss for worker id: 192.168.1.249:10778 tensor(0.0006, requires_grad=True)
+Time round 0 : 19.155116081237793
+Loss for worker id: 192.168.1.163:8777 tensor(0.0004, requires_grad=True)
+Loss for worker id: 192.168.1.249:10778 tensor(0.0005, requires_grad=True)
+Time round 1 : 18.485437393188477
+Loss for worker id: 192.168.1.163:8777 tensor(0.0001, requires_grad=True)
+Loss for worker id: 192.168.1.249:10778 tensor(0.0008, requires_grad=True)
+Time round 2 : 18.610790252685547
+Loss for worker id: 192.168.1.163:8777 tensor(0.0002, requires_grad=True)
+Loss for worker id: 192.168.1.249:10778 tensor(4.8877e-05, requires_grad=True)
+Time round 3 : 18.747868299484253
+Loss for worker id: 192.168.1.163:8777 tensor(3.3498e-05, requires_grad=True)
+Loss for worker id: 192.168.1.249:10778 tensor(3.3975e-05, requires_grad=True)
+Time round 4 : 18.61428189277649
+Loss for worker id: 192.168.1.163:8777 tensor(0.0001, requires_grad=True)
+Loss for worker id: 192.168.1.249:10778 tensor(3.2902e-05, requires_grad=True)
+Time round 5 : 18.770642042160034
+Total training time: 112.38425183296204
+Loss evaluation global model after training: 0.0008522364770314008
+Testing round on: 3000
+Loss for worker id: 192.168.1.163:8777 tensor(0.0045, requires_grad=True)
+Loss for worker id: 192.168.1.249:10778 tensor(0.0006, requires_grad=True)
+Time round 0 : 19.093201875686646
+Loss for worker id: 192.168.1.163:8777 tensor(0.0004, requires_grad=True)
+Loss for worker id: 192.168.1.249:10778 tensor(0.0005, requires_grad=True)
+Time round 1 : 18.477653980255127
+Loss for worker id: 192.168.1.163:8777 tensor(0.0001, requires_grad=True)
+Loss for worker id: 192.168.1.249:10778 tensor(0.0008, requires_grad=True)
+Time round 2 : 18.57596707344055
+Loss for worker id: 192.168.1.163:8777 tensor(0.0002, requires_grad=True)
+Loss for worker id: 192.168.1.249:10778 tensor(4.8877e-05, requires_grad=True)
+Time round 3 : 18.48815107345581
+Loss for worker id: 192.168.1.163:8777 tensor(3.3498e-05, requires_grad=True)
+Loss for worker id: 192.168.1.249:10778 tensor(3.3975e-05, requires_grad=True)
+Time round 4 : 18.640737056732178
+Loss for worker id: 192.168.1.163:8777 tensor(0.0001, requires_grad=True)
+Loss for worker id: 192.168.1.249:10778 tensor(3.2902e-05, requires_grad=True)
+Time round 5 : 18.538717031478882
+Total training time: 111.81453394889832
+Loss evaluation global model after training: 0.0008522364770314008
