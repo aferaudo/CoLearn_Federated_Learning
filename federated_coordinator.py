@@ -388,7 +388,7 @@ def starting_training_local(lower_bound, upper_bound, path, args, server):
         f.write("total_items: " + str(n_train_items)) # testing
         f.write("\ntotal_epochs: " + str(args.epochs)) # testing
         start_time = time.time() # testing
-         counter = 0 # testing
+        counter = 0 # testing
         
         # Be aware: in this case the training is sequential (It is not important to have asynchronism in this case)
         logging.info("Start training")
@@ -502,7 +502,7 @@ def starting_training_enc(lower_bound, upper_bound, path, args, server, hook):
         end_time = time.time() # testing
 
         f.write("\n"+str(psutil.getloadavg())) # testing
-        f.write("\ntotal_time: " + str((end_time - start_time))) # testing
+        f.write("\ntotal_time: " + str((end_time - start_time))) #testing
         f.close() # testing
 
         # Printing new model parameters
