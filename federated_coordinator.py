@@ -486,7 +486,7 @@ def starting_training_enc(lower_bound, upper_bound, path, args, server, hook):
         logging.info("Done")
 
         
-        # f = open("../test results/test_encrypted.txt", "a+") # testing
+        f = open("../test results/test_encrypted.txt", "a+") # testing
         
         # Testing code
         f.write("total_items: " + str(n_train_items)) # testing
@@ -587,7 +587,7 @@ async def training_remote(lower_bound, upper_bound, path, args, general_known_wo
             # Schedule calls for each worker concurrently:
             if round > 1:
                 logging.info("Round activated!")
-                args.set_federated_batches(3000)
+                args.set_federated_batches(1000)
             
             logging.info("Federated batches: " + str(args.federate_after_n_batches))
 
