@@ -86,7 +86,9 @@ parser = argparse.ArgumentParser(description="Run Federated coordinator")
 parser.add_argument(
     "--port", "-p", type=int, default=1883, help="port number of the where the broker is listining (default 1883)"
 )
-parser.add_argument("--host", type=str, default="localhost", help="broker ip address (default localhost)")
+parser.add_argument(
+    "--host", type=str, default="localhost", help="broker ip address (default localhost)"
+)
 
 parser.add_argument(
     "--topic", "-t", type=str, required=True, help="topic where the event must be published"
@@ -104,8 +106,12 @@ parser.add_argument(
     "--federated_round", "-f", type=int, default=1, help="(work in progress) Enable or disable the rounds, if the round are activated the training is stopped after nbatches and then restarted (round must be greater then one)"
 )
 
+parser.add_argument(
+    "--iot", "-i",  action='store_true', default="localhost", help="enable iot validation"
+)
+
 class Coordinator(mqtt.Client):
-    def __init__(self, window, remote, federated_round, encryption):
+    def __init__(self, window, remote, federated_round, encryption, iot_validation):
         """
         This class is a client mqtt which waits for mqtt events in order to train and do inference on IoT devices
         Args:
@@ -121,6 +127,7 @@ class Coordinator(mqtt.Client):
         self.remote = remote
         self.enabled_round = federated_round
         self.encryption = encryption
+        self.iot_validation = iot_validation
 
         # Other useful parameters
         self.training_lower_bound = 1
@@ -142,7 +149,7 @@ class Coordinator(mqtt.Client):
 
     def on_message(self, mqttc, obj, msg):
         logging.info(msg.topic+" "+str(msg.qos)+" "+str(msg.payload))
-        parser = EventParser(msg.payload)
+        parser = EventParser(msg.payload, self.iot_validation) #TODO change!
         
         # Obtain ip address
         ip_address = parser.ip_address()
@@ -624,22 +631,13 @@ async def training_remote(lower_bound, upper_bound, path, args, general_known_wo
 
 
 def main(argv):
-    # Model to test instance cration
-    # model = cf.GRUModel(input_dim=10, hidden_dim=10, output_dim=1, n_layers=1)
     format = "%(asctime)s: %(message)s"
 
     logging.basicConfig(format=format, level=logging.INFO,
                         datefmt="%H:%M:%S")
     logging.info(os.getpid())
-    mqttc = Coordinator(args.window, args.remote, args.federated_round, args.encryption)
+    mqttc = Coordinator(args.window, args.remote, args.federated_round, args.encryption, args.iot)
     mqttc.run(args.host, args.port, args.topic)
-    # model = cf.FFNN()
-    # model.load_state_dict(torch.load('./test.pth'))
-    # for param in model.parameters():
-    #     print(param.data)
-    # test_dataset = NetworkTrafficDataset("/Users/angeloferaudo/Downloads/UNSW_2018_IoT_Botnet_Final_10_best_Training_3.csv", transform=ToTensor())
-    # test_loader = torch.utils.data.DataLoader(test_dataset, shuffle=True)
-    # cf.evaluate(model,test_loader,device)
 
 if __name__ == "__main__":
 

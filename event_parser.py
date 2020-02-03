@@ -5,11 +5,11 @@ states = ["TRAINING", "INFERENCE", "NOT_READY"]
 
 
 class EventParser():
-    def __init__(self, message):
+    def __init__(self, message, filtering):
         # The message received is typically encoded in binary
         # So, must be transformed in string
         self.message = message.decode('utf-8').replace(" ","")
-
+        self.filtering = filtering
     
     def ip_address(self):
         
@@ -19,11 +19,17 @@ class EventParser():
 
         # 2) obtain the ip address
         ip_address = re.split(r',', to_parse)[0]
-
+       
         # 3) verify ip address
         pattern = r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}'
         if(re.match(pattern, ip_address)):
-            return ip_address
+            if not self.filtering:
+                return ip_address
+            else:
+                if valid_iot_ip_address(ip_address):
+                    return ip_address
+                else:
+                    return -1
         else:
             return -1
     
@@ -65,4 +71,20 @@ class EventParser():
     def inference(self):
         return states[1]
 
+def valid_iot_ip_address(ip_address):
+    """
+        This method verify that the ip address is an IoT device.
+        To do that, it uses the file "filtering_file.txt" in the device_filtering folder,
+        which is the file updated each 40 seconds (this is the default value, of course can change) 
+        by the router.
+    """
+    
+    with open("./device_filtering/filtering_file.txt", "r") as f:
+        lines = f.readlines()
+        for line in lines:
+            if line.rstrip() == ip_address:
+                return True
+        
+    
+    return False
 
