@@ -5,21 +5,24 @@ states = ["TRAINING", "INFERENCE", "NOT_READY"]
 
 
 class EventParser():
-    def __init__(self, message, filtering):
+    def __init__(self, filtering):
         # The message received is typically encoded in binary
         # So, must be transformed in string
-        self.message = message.decode('utf-8').replace(" ","")
+        self._message = ""
         self.filtering = filtering
     
+    def set_message(self, message):
+        self._message = message.decode('utf-8').replace(" ","")
+    
+
     def ip_address(self):
-        
         # Now the string must be parsed, in order to obtain the ip address of the device
         # 1) remove the brackets
-        to_parse = re.sub(r'[\(\)]', '', self.message)
+        to_parse = re.sub(r'[\(\)]', '', self._message)
 
         # 2) obtain the ip address
         ip_address = re.split(r',', to_parse)[0]
-       
+        
         # 3) verify ip address
         pattern = r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}'
         if(re.match(pattern, ip_address)):
@@ -38,7 +41,7 @@ class EventParser():
             return -1
         
         # 1) remove the brackets
-        to_parse = re.sub(r'[\(\)]', '', self.message)
+        to_parse = re.sub(r'[\(\)]', '', self._message)
 
         # 2) obtain the port
         port = int(re.split(r',', to_parse)[1])
@@ -52,7 +55,7 @@ class EventParser():
     def state(self, local=False):
         # Now the string must be parsed, in order to obtain the event sent by the device (which represent its state)
         # 1) remove the brackets
-        to_parse = re.sub(r'[\(\)]', '', self.message)
+        to_parse = re.sub(r'[\(\)]', '', self._message)
 
         # 2) obtain the state
         if local:

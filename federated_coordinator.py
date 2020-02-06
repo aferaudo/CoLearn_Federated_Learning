@@ -107,7 +107,7 @@ parser.add_argument(
 )
 
 parser.add_argument(
-    "--iot", "-i",  action='store_true', default="localhost", help="enable iot validation"
+    "--iot", "-i",  action='store_true', help="enable iot validation"
 )
 
 class Coordinator(mqtt.Client):
@@ -130,6 +130,7 @@ class Coordinator(mqtt.Client):
         self.iot_validation = iot_validation
 
         # Other useful parameters
+        self.event_parser = EventParser(self.iot_validation)
         self.training_lower_bound = 1
         self.training_lower_bound_enc = 1
         self.training_upper_bound = 100
@@ -149,10 +150,10 @@ class Coordinator(mqtt.Client):
 
     def on_message(self, mqttc, obj, msg):
         logging.info(msg.topic+" "+str(msg.qos)+" "+str(msg.payload))
-        parser = EventParser(msg.payload, self.iot_validation) #TODO change!
+        self.event_parser.set_message(msg.payload) #TODO change!
         
         # Obtain ip address
-        ip_address = parser.ip_address()
+        ip_address = self.event_parser.ip_address()
         worker = None
         
         if not self.remote:
@@ -161,7 +162,7 @@ class Coordinator(mqtt.Client):
             logging.info("Local testing")
 
             # Obtain the state of the server
-            state = parser.state(local=True)
+            state = self.event_parser.state(local=True)
             
             # Create Local worker
             if ip_address != -1 and state != None and state != "NOT_READY":
@@ -173,8 +174,8 @@ class Coordinator(mqtt.Client):
 
         else:
             logging.info("Remote execution")
-            state = parser.state()
-            port = parser.port()
+            state = self.event_parser.state()
+            port = self.event_parser.port()
             
             # Create remote Worker
             if port != -1 and ip_address != -1 and state != None and state != "NOT_READY":

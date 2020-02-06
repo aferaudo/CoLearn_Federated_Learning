@@ -31,20 +31,6 @@ parser.add_argument(
 )
 
 
-# Can be useful to do the test on encryption
-# for x in range(100):
-#     print(psutil.cpu_percent(interval=1))
-# for x in range(100):
-#     print(psutil.cpu_times_percent(interval=1, percpu=False))
-
-# print(psutil.cpu_count(logical=False))
-
-# print(psutil.getloadavg())
-
-# print(psutil.net_io_counters(pernic=True))
-
-# print(psutil.sensors_battery())
-# print(psutil.test())
 
 def monitor_cpu(pid):
     f = open("monitoring_cpu.txt", "w+")
