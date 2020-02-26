@@ -29,32 +29,32 @@ then
 fi
 REMOTE_USER=""
 REMOTE_PATH=""
-INTERVAL_OF_SCANNING=40
+INTERVAL_OF_SCANNING=10
 while getopts "hu:p:i:" OPTION; do
         case $OPTION in
 		
-		u)
-                        REMOTE_USER=$OPTARG
-                        ;;
+				u)
+					REMOTE_USER=$OPTARG
+					;;
                 p)
-       			REMOTE_PATH=$OPTARG
-       			;;         	
+					REMOTE_PATH=$OPTARG
+					;;         	
                 i)
-                        INTERVAL_OF_SCANNING=$OPTARG
-                        ;;
+					INTERVAL_OF_SCANNING=$OPTARG
+					;;
                 h)
-                        echo "The remote script executed is a python script, called file_upgrader.py
+					echo "The remote script executed is a python script, called file_upgrader.py
 Pay attention: The script works only with osmud and needs a secure connection without password between the device that call the script (router as openssh client) and the device coordinator. Furthermore the coordinator's ip address must be registred as www.mfs.example.com in the file /etc/hosts. To launch this script in background you can use $0 -p <script_path> -u <user> -i <interval> >/dev/null &"
-                        echo "Usage:"
-                        echo "$0 -h "
-                        echo "$0 -p <script_path> -u <user> -i <interval>"
-                        echo ""
-                        echo "	 -u	coordinator user"
-                     	echo "	 -p	script's path on the coordinator device (this is not so secure for now, because an attacker can execute another script on the other side)"
-                        echo "	 -i	interval of scanning the file /var/log/dnsmasq.txt (default 40 seconds)"
-                        echo "   -h     help"
-                        exit 0
-                        ;;
+					echo "Usage:"
+					echo "$0 -h "
+					echo "$0 -p <script_path> -u <user> -i <interval>"
+					echo ""
+					echo "	 -u	coordinator user"
+					echo "	 -p	script's path on the coordinator device (this is not so secure for now, because an attacker can execute another script on the other side)"
+					echo "	 -i	interval of scanning the file /var/log/dnsmasq.txt (default 40 seconds)"
+					echo "   -h     help"
+					exit 0
+					;;
 
         esac
 done
@@ -67,9 +67,7 @@ while true;do
 		COMMAND=$(echo $line | awk -F "|" '{ print $2}')
 		MUD_URL=$(echo $line | awk -F "|" '{ print $7}')
 		IP_TO_VALIDATE=$(echo $line | awk -F "|" '{ print $10}')
-		# echo $COMMAND
-		# echo $MUD_URL
-		# echo $IP_TO_VALIDATE
+
 		if [ "$MUD_URL" = "-" -o "$COMMAND" = "OLD" ]; then
 			echo "not valid"
 		else	

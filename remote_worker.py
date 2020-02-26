@@ -90,27 +90,27 @@ def main(args):  # pragma: no cover
     #     print("DATA: " + str(data))
     #     print("TARGET: " + str(target))
     
-    if args.inference == None:
-        # Setup toy data
-        y = th.tensor([[0.0, 1.0], [1.0, 0.0], [1.0, 1.0], [0.0, 0.0]],requires_grad=False).tag("inference")
-    else:
-        # TODO change with the real dataset
-        y = th.tensor([[0.0, 1.0], [1.0, 0.0], [1.0, 1.0], [0.0, 0.0]],requires_grad=False).tag("inference")
+    inference_tensors = list()
 
-    # training_dataset = th.tensor(dataset.data).tag("training")
-    # i = 0
-    # training_tensor = list()
-    
     # Create websocket worker
-    worker = WebsocketServerWorker(data=[y], **kwargs)
+    worker = WebsocketServerWorker(**kwargs)
     
-    # for data in dataset.data:
-    #     training_tensor.append(th.tensor(data).float().tag("training"))
-    # worker.load_data(training_tensor)
+    if args.inference != None:
+        print(args.inference)
+        dataset_inf = NetworkTrafficDataset(args.inference, transform=ToTensor())
+        
+        # Loading inference data
+        for data in dataset_inf.data:
+            inference_tensors.append(th.tensor(data).float().tag("inference"))
+        worker.load_data(inference_tensors)
+
+    
+    
     # Tell the worker about the dataset
     worker.add_dataset(dataset, key="training")
 
     fn = lambda : client.publish(args.topic, to_publish)
+    
     # Publish the event that the server is ready after an interval
     t = Timer(args.wait, fn)
     t.start()

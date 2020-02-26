@@ -132,8 +132,9 @@ class Coordinator(mqtt.Client):
         # Other useful parameters
         self.event_parser = EventParser(self.iot_validation)
         self.training_lower_bound = 1
-        self.training_lower_bound_enc = 1
+        self.training_lower_bound_enc = 2
         self.training_upper_bound = 100
+        self.training_upper_bound_enc = 2
         self.training_workers_id = []
         self.__hook = sy.TorchHook(torch)
         self.__hook.local_worker.is_client_worker = False # Set the local worker as a server: All the other worker will be registered in __known_workers
@@ -181,6 +182,7 @@ class Coordinator(mqtt.Client):
             if port != -1 and ip_address != -1 and state != None and state != "NOT_READY":
                 identifier = ip_address + ":" + str(port)
                 logging.info("Remote worker idetifier: " + identifier)
+
                 kwargs_websocket = {"host": ip_address, "hook": self.__hook, "verbose": True}
                 try:
                     worker = WebsocketClientWorker(id=identifier, port=port, **kwargs_websocket)
@@ -225,7 +227,7 @@ class Coordinator(mqtt.Client):
                         if self.encryption:
                             function_to_start = lambda : starting_training_enc(
                                                                                 lower_bound=self.training_lower_bound_enc,
-                                                                                upper_bound=self.training_upper_bound,
+                                                                                upper_bound=self.training_upper_bound_enc,
                                                                                 path=self.path,
                                                                                 args=self.args,
                                                                                 server=self.server,
@@ -233,7 +235,7 @@ class Coordinator(mqtt.Client):
                                                                                 )
                         else:
                             function_to_start = lambda : starting_training_local(
-                                                                                lower_bound=self.training_lower_bound_enc,
+                                                                                lower_bound=self.training_lower_bound,
                                                                                 upper_bound=self.training_upper_bound,
                                                                                 path=self.path,
                                                                                 args=self.args,
@@ -259,7 +261,7 @@ class Coordinator(mqtt.Client):
                         model.load_state_dict(torch.load(self.path))
             
                     # Obtain pointer to the data
-                    data_pointer = worker.search("inference")# This return a list, we take only the first element
+                    data_pointer = worker.search("inference") # This return a list, we take only the first element
                     logging.info(data_pointer)
                     if data_pointer != []:
                         data_pointer = data_pointer[0]
@@ -267,14 +269,9 @@ class Coordinator(mqtt.Client):
                         # Send the model
                         model = model.send(worker)
 
-                        # To avoid waste of bandwidth the best solution is to create a behaviour that send back an event in case of anomaly
-                        # Build the plan
-                        # inference_with_anomaly_detection.build()
-                        # pointer_plan = inference_with_anomaly_detection.send(worker)
-
                         # Apply the model to the data
                         with torch.no_grad():
-                            # TODO Define a behaviour in case of anomaly detected!
+                            # TODO Define a behaviour based on the inference!
                             output_pointer = model(data_pointer)
                             prediction_pointer = output_pointer.argmax(1, keepdim=True)
                             logging.info(prediction_pointer.get())
@@ -421,18 +418,17 @@ def starting_training_enc(lower_bound, upper_bound, path, args, server, hook):
     
     if len(settings.training_devices) >= lower_bound:
         
-        if len(settings.training_devices) >= upper_bound:
-           logging.info("Applying selection criteria")
-        
         # Copy virtual workers to train (MAX 2) (this is useful so then I can delete only the devices that have been trained)
         to_train = {}
-        i = 0
-        for worker in settings.training_devices.keys():
-            if i >= 2:
-                break
-            else:
-                to_train[worker] = settings.training_devices[worker]
-                i += 1
+        if len(settings.training_devices) >= upper_bound:
+            logging.info("Applying selection criteria")
+            # Select only two devices
+            to_train = {k: settings.training_devices[k] for k in list(settings.training_devices)[:2]}
+        else:
+            loggin.info("No selection criteria applied")
+            to_train = settings.training_devices.copy()
+        
+        
 
         # Loading of the model
         model = cf.FFNN()
@@ -462,7 +458,6 @@ def starting_training_enc(lower_bound, upper_bound, path, args, server, hook):
         # Distribution of the encrypted model among the workers (fixed_precision is needed, in order to perform consistently operations like the weight update)
         logging.info("Encryption and distribution of the model...")
         model = model.fix_precision().share(*to_train, crypto_provider=crypto_provider, requires_grad=True)
-        print(model)
         logging.info("Done")
 
         # Optimizer creation and fix precision on it
@@ -559,7 +554,7 @@ async def training_remote(lower_bound, upper_bound, path, args, general_known_wo
             # Schedule calls for each worker concurrently:
             if round > 1:
                 logging.info("Round activated!")
-                args.set_federated_batches(10000)
+                args.set_federated_batches(1000)
             
             logging.info("Federated batches: " + str(args.federate_after_n_batches))
 
