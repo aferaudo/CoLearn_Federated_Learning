@@ -1,0 +1,12 @@
+Testing round on: 2000
+Loss for worker id: 192.168.1.249:10778 tensor(0., requires_grad=True)
+Loss for worker id: 192.168.1.163:8777 tensor(0., requires_grad=True)
+Time round 0 : 13.182723045349121
+Loss for worker id: 192.168.1.249:10778 tensor(1.1921e-07, requires_grad=True)
+Loss for worker id: 192.168.1.163:8777 tensor(0., requires_grad=True)
+Time round 1 : 12.714451313018799
+Loss for worker id: 192.168.1.249:10778 tensor(9.5367e-07, requires_grad=True)
+Loss for worker id: 192.168.1.163:8777 tensor(0., requires_grad=True)
+Time round 2 : 12.602408170700073
+Total training time: 38.49968409538269
+Loss evaluation global model after training: 0.0005106833491491126

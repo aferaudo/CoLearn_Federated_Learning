@@ -1,0 +1,183 @@
+psutil.Process(pid=1604, name='python3', started='17:48:09')
+Monitoring: 0 2020-01-30 17:49:20.335738
+pcputimes(user=26.59, system=1.59, children_user=0.0, children_system=0.0, iowait=0.0)
+0.0
+Monitoring: 1 2020-01-30 17:49:21.339961
+pcputimes(user=26.59, system=1.59, children_user=0.0, children_system=0.0, iowait=0.0)
+0.0
+Monitoring: 2 2020-01-30 17:49:22.344585
+pcputimes(user=26.59, system=1.59, children_user=0.0, children_system=0.0, iowait=0.0)
+0.0
+Monitoring: 3 2020-01-30 17:49:23.347965
+pcputimes(user=26.59, system=1.59, children_user=0.0, children_system=0.0, iowait=0.0)
+0.0
+Monitoring: 4 2020-01-30 17:49:24.352859
+pcputimes(user=26.59, system=1.59, children_user=0.0, children_system=0.0, iowait=0.0)
+0.0
+Monitoring: 5 2020-01-30 17:49:25.358989
+pcputimes(user=26.59, system=1.59, children_user=0.0, children_system=0.0, iowait=0.0)
+0.0
+Monitoring: 6 2020-01-30 17:49:26.362432
+pcputimes(user=26.59, system=1.59, children_user=0.0, children_system=0.0, iowait=0.0)
+0.0
+Monitoring: 7 2020-01-30 17:49:27.367554
+pcputimes(user=26.59, system=1.59, children_user=0.0, children_system=0.0, iowait=0.0)
+0.0
+Monitoring: 8 2020-01-30 17:49:28.372513
+pcputimes(user=26.59, system=1.59, children_user=0.0, children_system=0.0, iowait=0.0)
+0.0
+Monitoring: 9 2020-01-30 17:49:29.377620
+pcputimes(user=26.59, system=1.59, children_user=0.0, children_system=0.0, iowait=0.0)
+0.0
+Monitoring: 10 2020-01-30 17:49:30.382703
+pcputimes(user=26.59, system=1.59, children_user=0.0, children_system=0.0, iowait=0.0)
+0.0
+Monitoring: 11 2020-01-30 17:49:31.387886
+pcputimes(user=26.59, system=1.59, children_user=0.0, children_system=0.0, iowait=0.0)
+0.0
+Monitoring: 12 2020-01-30 17:49:32.394171
+pcputimes(user=26.59, system=1.59, children_user=0.0, children_system=0.0, iowait=0.0)
+0.0
+Monitoring: 13 2020-01-30 17:49:33.397648
+pcputimes(user=26.59, system=1.59, children_user=0.0, children_system=0.0, iowait=0.0)
+0.0
+Monitoring: 14 2020-01-30 17:49:34.403912
+pcputimes(user=26.59, system=1.59, children_user=0.0, children_system=0.0, iowait=0.0)
+0.0
+Monitoring: 15 2020-01-30 17:49:35.407322
+pcputimes(user=26.59, system=1.59, children_user=0.0, children_system=0.0, iowait=0.0)
+0.0
+Monitoring: 16 2020-01-30 17:49:36.412438
+pcputimes(user=26.59, system=1.59, children_user=0.0, children_system=0.0, iowait=0.0)
+0.0
+Monitoring: 17 2020-01-30 17:49:37.417598
+pcputimes(user=26.59, system=1.59, children_user=0.0, children_system=0.0, iowait=0.0)
+0.0
+Monitoring: 18 2020-01-30 17:49:38.423829
+pcputimes(user=26.59, system=1.59, children_user=0.0, children_system=0.0, iowait=0.0)
+17.0
+Monitoring: 19 2020-01-30 17:49:39.426970
+pcputimes(user=26.75, system=1.6, children_user=0.0, children_system=0.0, iowait=0.0)
+99.8
+Monitoring: 20 2020-01-30 17:49:40.430149
+pcputimes(user=27.72, system=1.63, children_user=0.0, children_system=0.0, iowait=0.0)
+99.8
+Monitoring: 21 2020-01-30 17:49:41.433338
+pcputimes(user=28.72, system=1.63, children_user=0.0, children_system=0.0, iowait=0.0)
+99.8
+Monitoring: 22 2020-01-30 17:49:42.436260
+pcputimes(user=29.71, system=1.64, children_user=0.0, children_system=0.0, iowait=0.0)
+99.8
+Monitoring: 23 2020-01-30 17:49:43.439234
+pcputimes(user=30.7, system=1.65, children_user=0.0, children_system=0.0, iowait=0.0)
+99.9
+Monitoring: 24 2020-01-30 17:49:44.441588
+pcputimes(user=31.68, system=1.67, children_user=0.0, children_system=0.0, iowait=0.0)
+100.9
+Monitoring: 25 2020-01-30 17:49:45.443955
+pcputimes(user=32.67, system=1.69, children_user=0.0, children_system=0.0, iowait=0.0)
+98.9
+Monitoring: 26 2020-01-30 17:49:46.446473
+pcputimes(user=33.66, system=1.7, children_user=0.0, children_system=0.0, iowait=0.0)
+99.9
+Monitoring: 27 2020-01-30 17:49:47.448936
+pcputimes(user=34.65, system=1.71, children_user=0.0, children_system=0.0, iowait=0.0)
+99.9
+Monitoring: 28 2020-01-30 17:49:48.451487
+pcputimes(user=35.64, system=1.72, children_user=0.0, children_system=0.0, iowait=0.0)
+99.9
+Monitoring: 29 2020-01-30 17:49:49.453949
+pcputimes(user=36.63, system=1.73, children_user=0.0, children_system=0.0, iowait=0.0)
+99.9
+Monitoring: 30 2020-01-30 17:49:50.456427
+pcputimes(user=37.64, system=1.73, children_user=0.0, children_system=0.0, iowait=0.0)
+99.9
+Monitoring: 31 2020-01-30 17:49:51.458933
+pcputimes(user=38.64, system=1.73, children_user=0.0, children_system=0.0, iowait=0.0)
+92.9
+Monitoring: 32 2020-01-30 17:49:52.461480
+pcputimes(user=39.55, system=1.75, children_user=0.0, children_system=0.0, iowait=0.0)
+98.9
+Monitoring: 33 2020-01-30 17:49:53.463673
+pcputimes(user=40.53, system=1.76, children_user=0.0, children_system=0.0, iowait=0.0)
+99.9
+Monitoring: 34 2020-01-30 17:49:54.465835
+pcputimes(user=41.52, system=1.77, children_user=0.0, children_system=0.0, iowait=0.0)
+99.9
+Monitoring: 35 2020-01-30 17:49:55.468211
+pcputimes(user=42.51, system=1.78, children_user=0.0, children_system=0.0, iowait=0.0)
+99.9
+Monitoring: 36 2020-01-30 17:49:56.470341
+pcputimes(user=43.48, system=1.81, children_user=0.0, children_system=0.0, iowait=0.0)
+99.9
+Monitoring: 37 2020-01-30 17:49:57.472809
+pcputimes(user=44.47, system=1.82, children_user=0.0, children_system=0.0, iowait=0.0)
+99.9
+Monitoring: 38 2020-01-30 17:49:58.475223
+pcputimes(user=45.46, system=1.83, children_user=0.0, children_system=0.0, iowait=0.0)
+99.9
+Monitoring: 39 2020-01-30 17:49:59.477766
+pcputimes(user=46.46, system=1.83, children_user=0.0, children_system=0.0, iowait=0.0)
+99.9
+Monitoring: 40 2020-01-30 17:50:00.480182
+pcputimes(user=47.45, system=1.84, children_user=0.0, children_system=0.0, iowait=0.0)
+99.9
+Monitoring: 41 2020-01-30 17:50:01.482556
+pcputimes(user=48.45, system=1.84, children_user=0.0, children_system=0.0, iowait=0.0)
+99.9
+Monitoring: 42 2020-01-30 17:50:02.485120
+pcputimes(user=49.44, system=1.85, children_user=0.0, children_system=0.0, iowait=0.0)
+99.9
+Monitoring: 43 2020-01-30 17:50:03.487511
+pcputimes(user=50.44, system=1.85, children_user=0.0, children_system=0.0, iowait=0.0)
+99.9
+Monitoring: 44 2020-01-30 17:50:04.489942
+pcputimes(user=51.44, system=1.85, children_user=0.0, children_system=0.0, iowait=0.0)
+91.9
+Monitoring: 45 2020-01-30 17:50:05.492510
+pcputimes(user=52.34, system=1.87, children_user=0.0, children_system=0.0, iowait=0.0)
+100.9
+Monitoring: 46 2020-01-30 17:50:06.494961
+pcputimes(user=53.35, system=1.87, children_user=0.0, children_system=0.0, iowait=0.0)
+99.9
+Monitoring: 47 2020-01-30 17:50:07.497450
+pcputimes(user=54.35, system=1.87, children_user=0.0, children_system=0.0, iowait=0.0)
+98.9
+Monitoring: 48 2020-01-30 17:50:08.499880
+pcputimes(user=55.35, system=1.88, children_user=0.0, children_system=0.0, iowait=0.0)
+99.9
+Monitoring: 49 2020-01-30 17:50:09.502308
+pcputimes(user=56.33, system=1.9, children_user=0.0, children_system=0.0, iowait=0.0)
+99.9
+Monitoring: 50 2020-01-30 17:50:10.504709
+pcputimes(user=57.31, system=1.92, children_user=0.0, children_system=0.0, iowait=0.0)
+99.9
+Monitoring: 51 2020-01-30 17:50:11.507157
+pcputimes(user=58.3, system=1.93, children_user=0.0, children_system=0.0, iowait=0.0)
+98.9
+Monitoring: 52 2020-01-30 17:50:12.509559
+pcputimes(user=59.28, system=1.94, children_user=0.0, children_system=0.0, iowait=0.0)
+99.9
+Monitoring: 53 2020-01-30 17:50:13.511717
+pcputimes(user=60.25, system=1.97, children_user=0.0, children_system=0.0, iowait=0.0)
+99.9
+Monitoring: 54 2020-01-30 17:50:14.514222
+pcputimes(user=61.24, system=1.98, children_user=0.0, children_system=0.0, iowait=0.0)
+99.9
+Monitoring: 55 2020-01-30 17:50:15.516632
+pcputimes(user=62.23, system=1.99, children_user=0.0, children_system=0.0, iowait=0.0)
+99.9
+Monitoring: 56 2020-01-30 17:50:16.519025
+pcputimes(user=63.22, system=2.0, children_user=0.0, children_system=0.0, iowait=0.0)
+99.9
+Monitoring: 57 2020-01-30 17:50:17.521500
+pcputimes(user=64.19, system=2.03, children_user=0.0, children_system=0.0, iowait=0.0)
+7.0
+Monitoring: 58 2020-01-30 17:50:18.524331
+pcputimes(user=64.26, system=2.03, children_user=0.0, children_system=0.0, iowait=0.0)
+0.0
+Monitoring: 59 2020-01-30 17:50:19.527322
+pcputimes(user=64.26, system=2.03, children_user=0.0, children_system=0.0, iowait=0.0)
+0.0
+Monitoring: 60 2020-01-30 17:50:20.530299
+pcputimes(user=64.26, system=2.03, children_user=0.0, children_system=0.0, iowait=0.0)

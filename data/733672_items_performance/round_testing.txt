@@ -1,0 +1,6 @@
+
+Testing round on: -1
+Loss for worker id: 192.168.1.163:8777 tensor(0., requires_grad=True)
+Time round 0 : 4481.615034818649
+Total training time: 4481.615072011948
+Loss evaluation global model after training: 0.0005704367297912953

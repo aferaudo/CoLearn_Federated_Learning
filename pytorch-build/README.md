@@ -120,6 +120,30 @@ sudo pip3 install Flask flask-socketio lz4 msgpack websocket-client websockets z
 
 At this point you will have everything installed
 
+## Install sklearn
+
+I had some problems also in this procedure.
+The problem in this case is the scipy installation. During this procedure, it is possible that the fortran library is missing. So, being based on fortran and C library, the procedure will be stopped and then reversed.
+To solve the problem first of all we need to install the fortran library.
+
+```
+sudo apt-get install gfortran
+```
+
+However, I still have the problem. After some research on the raspeberry forum, I found that the wheel file provided are not well defined.
+So, the procedure to install scipy is the following
+
+```
+sudo apt-get install python3-scipy
+```
+
+Then you can install sklearn
+
+```
+pip3 install sklearn
+```
+
+
 ## Other tutorials
 
 This guide was realised only because I couldn't find a well explained guide to install pytorch 1.3 and the last version of syft for the arm architecture. I needed this version to support the remote workers (WebsocketServerWorker).
@@ -129,3 +153,8 @@ So, I think that could be useful for you also this link:
 - [link1](https://medium.com/secure-and-private-ai-writing-challenge/a-step-by-step-guide-to-installing-pytorch-in-raspberry-pi-a1491bb80531)
 - [link2](https://medium.com/secure-and-private-ai-writing-challenge/a-step-by-step-guide-to-installing-pysyft-in-raspberry-pi-d8d10c440c37)
 - [link3](https://blog.openmined.org/federated-learning-of-a-rnn-on-raspberry-pis/) 
+
+
+## Raspberry PI 3b+ image
+
+If you are lazy, you can find the image [here](https://mega.nz/#!BUQhBQST!AwLQTJHmLbz2AMYjfReD_88oWlKQqRbQfX6L0GKZTJw)
