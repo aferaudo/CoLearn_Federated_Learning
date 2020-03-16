@@ -1,4 +1,3 @@
-# TODO Specify in the thesis that this implementation doesn't have any kind of logic! The logic will be realized in future versions-
 # How to use example:
 # python remote_worker.py --host 127.0.0.1 -p 8778 -b localhost -t "topic/state" -w 1 -e "TRAINING" --verbose <-dt> <data available for training> <-di> <data available for inference>
 # THE HOST (--host) MUST BE SPECIFIED AS AN IP (also for localhost communication), instead no problem for the broker

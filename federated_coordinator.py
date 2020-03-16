@@ -4,21 +4,6 @@
 # TODO Complete closing when ctrl-c is called: It is just missing the closing of the window thread
 # TODO Do the federated after n_batches in a more clever way
 
-# Be aware of these cases:
-# 1) What happen if a new device desires to do the training after the window? --> solution of the todo
-# We have some problems in case of local training, this because it is sequential. So, this device is not considered or the timer is restarted (it depends on when the settings.event_served variable is changed).
-# For example, if we do it at the beginning a new time window will be opened (problem of data distribution), if we
-# do it at the end of the time window, all the event received during the training are not managed (this is the default behaviour). The last case, could generate some errors in the 
-# training phase because the data is not distributed in these devices.
-# In the remote case instead, the remote worker, for which the training is started, is deleted from the dict of devices to train.
-# So, when new events from new devices are received during the training phase, they are considered after that the training already started will end.
-# To avoid the loosing of model upgrade propagation, the settings.event_served is changed at the end of the first window. So, the devices received during the
-# training phase related to this window, which desire to be trained,  will be managed with the new model generated in from the previous training phase. 
-# Of course, this requires that a new device will trigger the window opening.
-# For example, at the end of the window_1 execution (so when the training of the devices received in this window start), three devices sent an event
-# where they are ready to do the "TRAINING". The training of these three devices will start, only after the ending of the training related to the window_1. But,
-# to trigger the execution of a new window_2, which will trigger the training of the previous three devices, another event from another devices must be received. This is how it works now, maybe some
-# improvements is needed (see the graph on the notebook to understand better the problem)
 
 # BROKER SETTINGS (First stop the default service launchctl stop homebrew.mxcl.mosquitto)
 # /usr/local/sbin/mosquitto -c /usr/local/etc/mosquitto/mosquitto.conf --> launch mosquitto
@@ -30,7 +15,8 @@
 # python federated_coordinator -t "topic/state" -r # remote case
 
 # BE CAREFUL: The program works only with the version 0.2.0a2, further version will be supported as soon as possible
-# TODO If you have some problem, reinstall the old version of syft syft-0.2.0a2 (current version: syft-0.2.2a1)
+# TODO Upgrade version --> current version: syft-0.2.2a1
+
 import argparse
 import logging
 import psutil

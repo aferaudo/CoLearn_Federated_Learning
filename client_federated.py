@@ -68,39 +68,6 @@ class FFNN(nn.Module):
     def get_traced_model(self):
         return torch.jit.trace(self, torch.zeros(10))
 
-class GRUModel(nn.Module):
-    # To understand the meaning of this variable visit the page of pytorch: https://pytorch.org/docs/master/nn.html#gru
-    def __init__(self, input_dim, hidden_dim, output_dim, n_layers, drop_prob=0.2):
-        super(GRUModel, self).__init__()
-        self.hidden_dim = hidden_dim
-        self.n_layers = n_layers
-
-        self.gru = nn.GRU(input_dim, hidden_dim, n_layers, batch_first=True, dropout=drop_prob)
-        self.fc = nn.Linear(hidden_dim, output_dim)
-        self.sigmoid = nn.Sigmoid()
-    
-    def forward(self, x, h):
-        out, h = self.gru(x,h)
-        out = self.fc(self.sigmoid(out[:, -1]))
-        return out, h
-    
-    def init_hidden(self, batch_size):
-        weight = next(self.parameters()).data
-        hidden = weight.new(self.n_layers, batch_size, self.hidden_dim).zero_().to(device)
-        return hidden
-    
-    def get_traced_model(self, batch_size):
-        """This method returns the model instantiated in torch.jit.trace format
-        Args:
-            batch_size: Batch size of each training step
-        Returns:
-            traced_model: model in torch.jit.trace format
-        """
-        # TODO implement the number of layer --> Now the number of layer must be one this means: dropout = 0
-        hidden = self.init_hidden(batch_size)
-        input_rdn_data = torch.rand(1,1,10)
-        traced_model = torch.jit.trace(self, (input_rdn_data, hidden))
-        return traced_model
 
 # Loss function
 # it needs to be serializable. 
@@ -239,18 +206,9 @@ async def train_remote(
         optimizer=optimizer,
         optimizer_args={"lr": lr},
     )
-    # When the training is started this remote worker can be removed from the devices to be training
-    
-    # try: 
     train_config.send(worker)
     loss = await worker.async_fit(dataset_key="training", return_ids=[0])
     model = train_config.model_ptr.get().obj
-    # finally:
-    #     # After the training, close the websocket with the server
-    #     worker.close()
-    #     print("Training ended and socket closed")
-    # print("Deleting worker: " + str(worker.id) + " from training devices")
-    # del settings.training_devices[worker.id]
      
     return worker.id, model, loss
 
@@ -278,10 +236,8 @@ def evaluate(model, test_loader, device):
             out = model(data)
             test_loss += F.binary_cross_entropy(input=out, target=target).item() # Apply binary cross entropy for our binary nn
             pred = torch.round(out) # Approximate the value to 1 or 0 to compute the correctiness of this prediction
-            #pred = output.argmax(1, keepdim=True) # get the index of the max log-probability 
-            # print("Prediction: " + str(pred))
+            # pred = output.argmax(1, keepdim=True) # get the index of the max log-probability
             temp = pred.eq(target.view_as(pred)).sum().item()
-            # # print(temp)
             if temp == 1:
                 correct += pred.eq(target.view_as(pred)).sum().item()
             else:
