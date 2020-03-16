@@ -399,7 +399,7 @@ def starting_training_local(lower_bound, upper_bound, path, args, server):
         #     print(param)
         
         # save model
-        # torch.save(model.state_dict(), self.path)
+        torch.save(model.state_dict(), path)
 
         # Deleting workers from training list
         for worker in to_train.keys():
@@ -425,7 +425,7 @@ def starting_training_enc(lower_bound, upper_bound, path, args, server, hook):
             # Select only two devices
             to_train = {k: settings.training_devices[k] for k in list(settings.training_devices)[:2]}
         else:
-            loggin.info("No selection criteria applied")
+            logging.info("No selection criteria applied")
             to_train = settings.training_devices.copy()
         
         
