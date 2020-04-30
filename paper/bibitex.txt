@@ -1,0 +1,9 @@
+@inproceedings{Feraudo2020,
+	author = {Angelo Feraudo and  Poonam Yadav and  Vadim Safronov and Diana Andreea Popescu and Richard Mortier and Shiqiang Wang and Paolo Bellavista and Jon Crowcroft},
+	title = {CoLearn: Enabling Federated Learning in MUD compliant IoT Edge Networks},
+	booktitle = { In 3rd International Workshop on Edge Systems, Analytics and Networking (EdgeSys’20)},
+	year = {2020},
+	address = {New York},
+	publisher = {ACM},
+	month = {April},
+}
