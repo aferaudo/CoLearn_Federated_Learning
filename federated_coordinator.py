@@ -1,10 +1,3 @@
-# TODO websocket Server side has a problem when the connection is closed: It continous to wait from the same client, even if the connection has been closed. There is a way to stop the process?
-# TODO Check the torch.jit.trace
-# TODO Which is the behaviour when the connection is lost? It continues to wait? It is an error, we have to manage it
-# TODO Complete closing when ctrl-c is called: It is just missing the closing of the window thread
-# TODO Do the federated after n_batches in a more clever way
-
-
 # BROKER SETTINGS (First stop the default service launchctl stop homebrew.mxcl.mosquitto)
 # /usr/local/sbin/mosquitto -c /usr/local/etc/mosquitto/mosquitto.conf --> launch mosquitto
 # mosquitto_pub -t topic/state -m "(192.168.1.7, TRAINING)" --> event to publish
@@ -15,7 +8,7 @@
 # python federated_coordinator -t "topic/state" -r # remote case
 
 # BE CAREFUL: The program works only with the version 0.2.0a2, further version will be supported as soon as possible
-# TODO Upgrade version --> current version: syft-0.2.2a1
+# PySyft version to use: syft-0.2.2a1
 
 import argparse
 import logging
