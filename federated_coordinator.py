@@ -4,8 +4,8 @@
 # In case of remote worker use the command described in the file
 
 # How to run the coordinator:
-# python federated_coordinator -t "topic/state" # local case
-# python federated_coordinator -t "topic/state" -r # remote case
+# python federated_coordinator.py -t "topic/state" # local case
+# python federated_coordinator.py -t "topic/state" -r # remote case
 
 # BE CAREFUL: The program works only with the version 0.2.0a2, further version will be supported as soon as possible
 # PySyft version to use: syft-0.2.2a1
@@ -21,8 +21,8 @@ import asyncio
 from torch import optim
 import time
 import os.path
-from syft.frameworks.torch.federated import utils # Old version
-# from syft.frameworks.torch.fl import utils
+# from syft.frameworks.torch.federated import utils # Old version
+from syft.frameworks.torch.fl import utils
 from syft.workers.websocket_client import WebsocketClientWorker
 
 import paho.mqtt.client as mqtt
@@ -55,7 +55,7 @@ class Arguments():
         self.seed = 1
         self.log_interval = 30
         self.save_model = False
-        self.test_path = "/Users/angeloferaudo/Downloads/UNSW_2018_IoT_Botnet_Final_10_best_Training_0.csv" # Insert the path for the testing evaluation
+        self.test_path = "./dataset_example/UNSW_2018_IoT_Botnet_Final_10_best_Training_1_1.csv" # Insert the path for the testing evaluation
     
     def set_federated_batches(self, batches):
         self.federate_after_n_batches = batches
@@ -82,11 +82,11 @@ parser.add_argument(
     "--encryption", "-e", action='store_true', help="Simulates the encryption on two virtual workes (you have to generate two workers with mosquitto_pub)"
 )
 parser.add_argument(
-    "--federated_round", "-f", type=int, default=1, help="(work in progress) Enable or disable the rounds, if the round are activated the training is stopped after nbatches and then restarted (round must be greater then one)"
+    "--federated_round", "-f", type=int, default=1, help="Enable or disable the rounds, if the round are activated the training is stopped after nbatches and then restarted (round must be greater then one)"
 )
 
 parser.add_argument(
-    "--iot", "-i",  action='store_true', help="enable iot validation"
+    "--iot", "-i",  action='store_true', help="enable iot validation (filter the ip address that can participate to the federated learning protocol)"
 )
 
 class Coordinator(mqtt.Client):
@@ -338,8 +338,8 @@ def starting_training_local(lower_bound, upper_bound, path, args, server):
         logging.info("Done")
 
         # For logging purpose: It will be commented in future version
-        for param in model.parameters():
-            print(param)
+        # for param in model.parameters():
+        #     print(param)
         
 
         # Distribution data among the virtual workers
@@ -391,7 +391,6 @@ def starting_training_local(lower_bound, upper_bound, path, args, server):
     # Restarting window
     settings.event_served = 0
 
-# TODO In a second moment it could not work, manage this problem
 def starting_training_enc(lower_bound, upper_bound, path, args, server, hook):
     """This function simulates the encryption of the model: It works only with two virtual workes"""
     
@@ -459,7 +458,6 @@ def starting_training_enc(lower_bound, upper_bound, path, args, server, hook):
         
         # Save model
 
-
         # Deleting workers from training list
         for worker in to_train.keys():
             logging.info("Removing: " + str(worker) + " from training devices")
@@ -526,6 +524,7 @@ async def training_remote(lower_bound, upper_bound, path, args, general_known_wo
             logging.info("Done")
 
             learning_rate = args.lr
+            
             # Remember that the serializable model requires a mock object
             traced_model = model.get_traced_model()
             
@@ -564,18 +563,11 @@ async def training_remote(lower_bound, upper_bound, path, args, general_known_wo
                     if worker_model is not None:
                         models[worker_id] = worker_model
                         logging.info("Loss for worker id: " + str(worker_id) + " " + str(worker_loss))
-                    
-                print(models) # Logging purposes
-                
 
                 # Apply the federated averaging algorithm
                 traced_model = utils.federated_avg(models) # Maybe here I've to use the traced_model
-                print(model) # Logging purposes
+                logging.info(model) # Logging purposes
             # Round end
-
-            # Logging purpose to verify if the parameters are changed
-            # for param in model.parameters():
-            #         print(param.data)
 
             # Close all the sockets and delete the workers
             for worker_id, _, _ in results:

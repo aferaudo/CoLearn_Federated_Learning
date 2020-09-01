@@ -105,7 +105,6 @@ def main(args):  # pragma: no cover
 
     
     
-    # Tell the worker about the dataset
     worker.add_dataset(dataset, key="training")
 
     fn = lambda : client.publish(args.topic, to_publish)
